@@ -1,11 +1,13 @@
+# ./rl_agent/parallel_env.py
+
 import multiprocessing as mp
 import numpy as np
 import torch
-from typing import List, Tuple, Any
+from typing import List, Tuple, Any, Optional
 import pickle
 import time
 
-from rl_agent.env import MiniMetroEnv
+# This import is removed from here: from rl_agent.env import MiniMetroEnv
 from rl_agent.dqn_agent import DQNAgent
 
 
@@ -16,9 +18,9 @@ class ParallelEnvironmentWorker:
         self.worker_id = worker_id
         self.command_queue = command_queue
         self.result_queue = result_queue
-        self.env = None
-        self.current_state = None
-        self.current_valid_actions = None
+        self.env: Optional[Any] = None
+        self.current_state: Optional[np.ndarray] = None
+        self.current_valid_actions: Optional[np.ndarray] = None
     
     def run(self):
         """Main worker loop - processes commands until told to stop."""
@@ -29,7 +31,9 @@ class ParallelEnvironmentWorker:
                 if command['type'] == 'init':
                     self._handle_init()
                 elif command['type'] == 'reset':
-                    self._handle_reset()
+                    # --- CHANGE START ---
+                    self._handle_reset(command['difficulty_stage'])
+                    # --- CHANGE END ---
                 elif command['type'] == 'step':
                     self._handle_step(command['action'])
                 elif command['type'] == 'close':
@@ -45,6 +49,8 @@ class ParallelEnvironmentWorker:
     
     def _handle_init(self):
         """Initialize the environment."""
+        # The import is moved here, so it only happens inside the worker process
+        from rl_agent.env import MiniMetroEnv
         self.env = MiniMetroEnv(headless=True)
         self.result_queue.put({
             'worker_id': self.worker_id,
@@ -53,9 +59,11 @@ class ParallelEnvironmentWorker:
             'action_size': self.env.action_size
         })
     
-    def _handle_reset(self):
+    # --- CHANGE START ---
+    def _handle_reset(self, difficulty_stage):
         """Reset the environment and return initial state."""
-        state, valid_actions = self.env.reset()
+        state, valid_actions = self.env.reset(difficulty_stage=difficulty_stage)
+    # --- CHANGE END ---
         self.current_state = state
         self.current_valid_actions = valid_actions
         
@@ -108,19 +116,23 @@ class ParallelEnvironments:
     
     def __init__(self, num_workers: int = 4):
         self.num_workers = num_workers
-        self.workers = []
-        self.command_queues = []
-        self.result_queue = mp.Queue()
-        self.processes = []
+        self.workers: List[ParallelEnvironmentWorker] = []
+        self.command_queues: List[mp.Queue] = []
+        self.result_queue: mp.Queue = mp.Queue()
+        self.processes: List[mp.Process] = []
         
         # Environment info (will be set after initialization)
-        self.state_size = None
-        self.action_size = None
+        self.state_size: Optional[int] = None
+        self.action_size: Optional[int] = None
         
         # Current states for each worker
-        self.worker_states = [None] * num_workers
-        self.worker_valid_actions = [None] * num_workers
+        self.worker_states: List[Optional[np.ndarray]] = [None] * num_workers
+        self.worker_valid_actions: List[Optional[np.ndarray]] = [None] * num_workers
         
+        # --- CHANGE START ---
+        self.current_difficulty_stage: int = 0
+        # --- CHANGE END ---
+
         self._initialize_workers()
     
     def _initialize_workers(self):
@@ -141,19 +153,35 @@ class ParallelEnvironments:
         
         # Wait for all workers to initialize
         initialized = 0
+        start_time = time.time()
+        timeout = 60  # 60 seconds timeout
+        
         while initialized < self.num_workers:
-            result = self.result_queue.get()
-            if result['type'] == 'init_done':
-                if self.state_size is None:
-                    self.state_size = result['state_size']
-                    self.action_size = result['action_size']
-                initialized += 1
+            try:
+                result = self.result_queue.get(timeout=5.0)  # 5 second timeout per get
+                if result['type'] == 'init_done':
+                    if self.state_size is None:
+                        self.state_size = result['state_size']
+                        self.action_size = result['action_size']
+                    initialized += 1
+                elif result['type'] == 'error':
+                    raise RuntimeError(f"Worker initialization failed: {result.get('error', 'Unknown error')}")
+            except:
+                if time.time() - start_time > timeout:
+                    raise RuntimeError(f"Timeout waiting for worker initialization. Only {initialized}/{self.num_workers} workers initialized.")
+                continue
     
+    # --- CHANGE START ---
+    def set_difficulty(self, stage: int):
+        """Set the difficulty for all subsequent environment resets."""
+        self.current_difficulty_stage = stage
+
     def reset_all(self) -> Tuple[np.ndarray, np.ndarray]:
         """Reset all environments and return initial states."""
         # Send reset commands to all workers
         for queue in self.command_queues:
-            queue.put({'type': 'reset'})
+            queue.put({'type': 'reset', 'difficulty_stage': self.current_difficulty_stage})
+    # --- CHANGE END ---
         
         # Collect results
         states = []
@@ -173,7 +201,7 @@ class ParallelEnvironments:
         
         return np.array(states), np.array(valid_actions)
     
-    def step_all(self, actions: List[int]) -> Tuple[np.ndarray, np.ndarray, List[dict], List[bool], List[dict]]:
+    def step_all(self, actions: List[int]) -> Tuple[np.ndarray, np.ndarray, List[Any], List[bool], List[Any], List[Any]]:
         """Execute actions in all environments."""
         assert len(actions) == self.num_workers, f"Expected {self.num_workers} actions, got {len(actions)}"
         
@@ -212,11 +240,13 @@ class ParallelEnvironments:
                 step_count += 1
         
         return (np.array(next_states), np.array(next_valid_actions), 
-                experiences, reward_details_list, dones, infos)
+                reward_details_list, dones, infos, experiences)
     
+    # --- CHANGE START ---
     def reset_worker(self, worker_id: int) -> Tuple[np.ndarray, np.ndarray]:
         """Reset a specific worker environment."""
-        self.command_queues[worker_id].put({'type': 'reset'})
+        self.command_queues[worker_id].put({'type': 'reset', 'difficulty_stage': self.current_difficulty_stage})
+    # --- CHANGE END ---
         
         # Wait for reset to complete
         while True:

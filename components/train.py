@@ -2,32 +2,33 @@
 import pygame
 import math
 import time
+from typing import List, Optional, Set, Any
 from config import CONFIG, STATION_TYPES
 
 class Train:
-    def __init__(self, line):
+    def __init__(self, line: Any):
         from state import game_state
-        self.id = game_state.train_id_counter
+        self.id: int = game_state.train_id_counter
         game_state.train_id_counter += 1
         
-        self.line = line
-        self.passengers = []
-        self.capacity = CONFIG.TRAIN_CAPACITY
-        self.current_station_index = 0
-        self.next_station_index = 1
-        self.direction = 1
-        self.x = 0
-        self.y = 0
-        self.progress = 0
+        self.line: Any = line
+        self.passengers: List[Any] = []
+        self.capacity: int = CONFIG.TRAIN_CAPACITY
+        self.current_station_index: int = 0
+        self.next_station_index: int = 1
+        self.direction: int = 1
+        self.x: float = 0
+        self.y: float = 0
+        self.progress: float = 0
         
-        self.state = 'WAITING'  # WAITING, MOVING
-        self.wait_timer = 0
+        self.state: str = 'WAITING'  # WAITING, MOVING
+        self.wait_timer: float = 0
         
-        self.speed = 0
-        self.max_speed = CONFIG.TRAIN_MAX_SPEED
+        self.speed: float = 0
+        self.max_speed: float = CONFIG.TRAIN_MAX_SPEED
         
-        self.has_carriage = False
-        self.is_loop = False
+        self.has_carriage: bool = False
+        self.is_loop: bool = False
         
         if line.stations:
             self.x = line.stations[0].x
@@ -36,7 +37,7 @@ class Train:
         
         self.check_loop_status()
     
-    def check_loop_status(self):
+    def check_loop_status(self) -> None:
         """Check if the line forms a loop"""
         if len(self.line.stations) >= 3:
             self.is_loop = self.line.stations[0] == self.line.stations[-1]
@@ -44,14 +45,15 @@ class Train:
             self.is_loop = False
     
     @property
-    def total_capacity(self):
+    def total_capacity(self) -> int:
         """Total capacity including carriage"""
         return self.capacity + (CONFIG.TRAIN_CAPACITY if self.has_carriage else 0)
     
-    def update(self, delta_time):
+    def update(self, delta_time: float) -> None:
         """Update train movement and logic"""
         from state import game_state
         
+
         if not self.line.active or len(self.line.stations) < 2:
             return
         
@@ -78,7 +80,8 @@ class Train:
         distance = math.sqrt(dx * dx + dy * dy)
         
         if distance == 0:
-            return
+            # This can happen if a line has duplicate consecutive stations. Let's force progress.
+            self.progress = 1
         
         # Speed control with acceleration/deceleration
         accel_dist = min(distance * 0.4, 60)
@@ -93,7 +96,8 @@ class Train:
             self.speed = self.max_speed
         
         # Update position
-        self.progress += (self.speed * game_state.speed * (delta_time / 16.67)) / distance
+        if distance > 0: # Avoid division by zero
+             self.progress += (self.speed * game_state.speed * (delta_time / 16.67)) / distance
         
         if self.progress >= 1:
             # Arrived at next station
@@ -107,8 +111,9 @@ class Train:
             # Interpolate position
             self.x = current_station.x + dx * self.progress
             self.y = current_station.y + dy * self.progress
-    
-    def determine_next_station(self):
+        
+
+    def determine_next_station(self) -> None:
         """Determine next station to travel to"""
         if self.current_station_index >= len(self.line.stations):
             self.current_station_index = 0
@@ -124,8 +129,8 @@ class Train:
             self.next_station_index = self.current_station_index + self.direction
         
         self.progress = 0
-    
-    def process_passengers(self, station):
+
+    def process_passengers(self, station: Any) -> None:
         """Handle passenger boarding and alighting"""
         passengers_changed = 0
         
@@ -164,8 +169,8 @@ class Train:
         self.wait_timer = passengers_changed * base_time
         if self.wait_timer <= 0:
             self.wait_timer = 300
-    
-    def _should_alight_passenger(self, passenger, station):
+
+    def _should_alight_passenger(self, passenger: Any, station: Any) -> bool:
         """Check if passenger should get off at this station"""
         from state import game_state
         
@@ -193,7 +198,7 @@ class Train:
                 return True
         return False
     
-    def _can_board_passenger(self, passenger, upcoming_stops):
+    def _can_board_passenger(self, passenger: Any, upcoming_stops: List[Any]) -> bool:
         """Check if passenger can board this train"""
         if not passenger.path or passenger.path_index >= len(passenger.path):
             passenger.recalculate_path()
@@ -201,7 +206,7 @@ class Train:
         
         return passenger.path[passenger.path_index] in upcoming_stops
     
-    def get_upcoming_stops(self, current_station, single_direction_only=False):
+    def get_upcoming_stops(self, current_station: Any, single_direction_only: bool = False) -> List[Any]:
         """Get list of upcoming stops on this train's route"""
         # (This function can remain the same as the original)
         upcoming = set()
@@ -213,8 +218,18 @@ class Train:
         try:
             current_index = line_stations.index(current_station)
         except ValueError:
-            current_index = 0
-        
+            # This can happen if the line was modified while the train was moving
+            # Find the closest station on the line and snap to it
+            min_dist = float('inf')
+            closest_idx = -1
+            for i, station in enumerate(line_stations):
+                dist = math.hypot(self.x - station.x, self.y - station.y)
+                if dist < min_dist:
+                    min_dist = dist
+                    closest_idx = i
+            current_index = closest_idx if closest_idx != -1 else 0
+
+
         current_direction = self.direction
         if not self.is_loop:
             if current_index == 0: current_direction = 1
@@ -238,7 +253,7 @@ class Train:
         
         return list(upcoming)
     
-    def reassign_to_line(self, new_line):
+    def reassign_to_line(self, new_line: Any) -> None:
         """Reassign train to a different line"""
         if self.line and self in self.line.trains: self.line.trains.remove(self)
         self.line = new_line
@@ -252,7 +267,7 @@ class Train:
         if new_line.stations: self.x, self.y = new_line.stations[0].x, new_line.stations[0].y
         self.check_loop_status()
     
-    def draw(self, screen):
+    def draw(self, screen: pygame.Surface) -> None:
         """Draw the train on screen"""
         # (This function can remain the same as the original, but with print statements removed)
         if not self.line.active or len(self.line.stations) < 2: return
@@ -265,7 +280,7 @@ class Train:
         if not current_st: return
         next_st = next_st or current_st
         
-        angle = 0
+        angle: float = 0.0
         if next_st != current_st:
             angle = math.atan2(next_st.y - current_st.y, next_st.x - current_st.x)
         

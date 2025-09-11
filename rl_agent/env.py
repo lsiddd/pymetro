@@ -1,6 +1,9 @@
 # ./rl_agent/env.py
+from typing import Tuple, Dict, Any, Optional
 import pygame
 import numpy as np
+from numpy.typing import NDArray
+import time
 
 from systems.game import Game
 from state import game_state
@@ -9,34 +12,38 @@ from rl_agent.action import perform_action, ACTION_SIZE, get_valid_actions
 from rl_agent.reward import calculate_reward, update_previous_metrics
 
 class MiniMetroEnv:
-    def __init__(self, headless=True):
-        pygame.init()
-        self.screen_width = 1200
-        self.screen_height = 800
-        self.headless = headless
+    def __init__(self, headless: bool = True) -> None:
+        self.screen_width: int = 1200
+        self.screen_height: int = 800
+        self.headless: bool = headless
         
         if not self.headless:
-            self.screen = pygame.display.set_mode((self.screen_width, self.screen_height))
+            pygame.init()
+            self.screen: Optional[pygame.Surface] = pygame.display.set_mode((self.screen_width, self.screen_height))
             pygame.display.set_caption("Mini Metro RL Environment")
         else:
-            self.screen = None # No screen needed in headless mode
+            # Initialize pygame without display for headless mode
+            import os
+            os.environ['SDL_VIDEODRIVER'] = 'dummy'
+            pygame.init()
+            self.screen: Optional[pygame.Surface] = None # No screen needed in headless mode
         
-        self.game = Game()
-        self.state_size = STATE_SIZE
-        self.action_size = ACTION_SIZE
-        self._max_episode_steps = 5000
-        self._current_step = 0
+        self.game: Game = Game()
+        self.state_size: int = STATE_SIZE
+        self.action_size: int = ACTION_SIZE
+        self._max_episode_steps: int = 5000
+        self._current_step: int = 0
         self.game_state = game_state
 
-    def reset(self):
-        self.game.init_game(self.screen_width, self.screen_height)
+    def reset(self, difficulty_stage: int = 0) -> Tuple[NDArray[np.float32], NDArray[np.bool_]]:
+        self.game.init_game(self.screen_width, self.screen_height, difficulty_stage=difficulty_stage)
         self._current_step = 0
         update_previous_metrics() # Initialize metrics for reward calculation
         state_vector = get_state_vector()
         valid_actions_mask = get_valid_actions()
         return state_vector, valid_actions_mask
 
-    def step(self, action):
+    def step(self, action: int) -> Tuple[NDArray[np.float32], NDArray[np.bool_], Dict[str, float], bool, Dict[str, Any]]:
         self._current_step += 1
         
         # 1. Perform Action
@@ -44,10 +51,10 @@ class MiniMetroEnv:
 
         # 2. Update Game State
         # Simulate a few frames for the action's effect to be measurable
-        num_frames_to_simulate = 30.0
+        num_frames_to_simulate = 30
         delta_time = 16.6667 # Corresponds to 60 FPS
         
-        for _ in range(num_frames_to_simulate):
+        for i in range(num_frames_to_simulate):
             if self.game_state.game_over:
                 break
             game_status = self.game.update(delta_time, self.screen_width, self.screen_height)
@@ -66,7 +73,7 @@ class MiniMetroEnv:
 
         # 5. Check if Done
         done = False
-        info = {'action_result': action_result} # Initialize info dict
+        info: Dict[str, Any] = {'action_result': action_result} # Initialize info dict
         if self.game_state.game_over or self._current_step >= self._max_episode_steps:
             done = True
             if self.game_state.game_over:
@@ -79,14 +86,18 @@ class MiniMetroEnv:
             info['final_score'] = self.game_state.score
             info['days_survived'] = (self.game_state.week - 1) * 7 + self.game_state.day
         
+        # Add additional info for logging
         info['valid_actions_count'] = np.sum(next_valid_actions_mask)
+        info['stations_count'] = len(self.game_state.stations)
+        connected_stations = sum(1 for station in self.game_state.stations if any(station in line.stations for line in self.game_state.lines if line.active))
+        info['connectivity_ratio'] = connected_stations / max(1, len(self.game_state.stations))
 
         # 6. Update metrics for next step's reward calculation
         update_previous_metrics()
 
         return next_state, next_valid_actions_mask, reward_details, done, info
 
-    def render(self):
+    def render(self) -> None:
         if self.headless or self.screen is None:
             return
         
@@ -100,5 +111,5 @@ class MiniMetroEnv:
         # Flip is handled by the evaluate script to allow drawing stats over the game
         # pygame.display.flip() 
 
-    def close(self):
+    def close(self) -> None:
         pygame.quit()

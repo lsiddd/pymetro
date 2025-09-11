@@ -32,10 +32,13 @@ class RLAgentConfig:
         # For parallel training, update less frequently since we collect more experiences per step
         self.UPDATE_EVERY = 4
 
+        # Gradient clipping value
+        self.GRADIENT_CLIP = 1.0
+
         # --- Device ---
         self.DEVICE = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
-    def __str__(self):
+    def __str__(self) -> str:
         return "\n".join([f"{key}: {value}" for key, value in self.__dict__.items()])
 
 class TrainingConfig:
@@ -63,7 +66,7 @@ class TrainingConfig:
         self.SAVE_INTERVAL_EPISODES = 200  # More frequent saves
         self.SAVE_INTERVAL_SECONDS = 600   # Save every 10 minutes
 
-    def __str__(self):
+    def __str__(self) -> str:
         return "\n".join([f"{key}: {value}" for key, value in self.__dict__.items()])
 
 

@@ -1,9 +1,10 @@
 # ./rl_agent/reward.py
+from typing import Dict
 from state import game_state
 import math
 
 # Stores metrics from the previous state to calculate deltas
-previous_metrics = {
+previous_metrics: Dict[str, int] = {
     'score': 0,
     'passengers_delivered': 0,
     'total_waiting': 0,
@@ -12,7 +13,7 @@ previous_metrics = {
     'days_survived': 0,
 }
 
-def update_previous_metrics():
+def update_previous_metrics() -> None:
     """Call this at the start of each step to store the current state."""
     previous_metrics['score'] = game_state.score
     previous_metrics['passengers_delivered'] = game_state.passengers_delivered
@@ -32,55 +33,48 @@ def update_previous_metrics():
     previous_metrics['days_survived'] = current_days
 
 
-def calculate_reward(action_result):
-    """More balanced reward function with progressive scaling"""
+# --- CHANGE START ---
+def calculate_reward(action_result: str) -> Dict[str, float]:
+    """
+    Reshaped reward function to focus on the primary goal: passenger delivery.
+    - Massive "jackpot" reward for delivering passengers.
+    - Small, constant penalty for every step to encourage efficiency.
+    - Penalties for waiting passengers and invalid actions.
+    - Removed rewards for proxy goals like connecting stations.
+    """
     rewards = {
         'delivery_reward': 0.0,
-        'efficiency_reward': 0.0,
-        'network_quality_reward': 0.0,
-        'penalties': 0.0,
-        'action_quality': 0.0,
+        'time_penalty': 0.0,
+        'waiting_penalty': 0.0,
+        'action_penalty': 0.0,
     }
 
-    # Progressive delivery reward - higher reward for more deliveries
+    # 1. Jackpot Reward: Large, clear reward for the main objective.
     passengers_delivered_delta = game_state.passengers_delivered - previous_metrics['passengers_delivered']
     if passengers_delivered_delta > 0:
-        # Scale reward based on difficulty (more reward early game)
-        difficulty_factor = max(0.5, 1.0 - (game_state.week / 52.0))
-        rewards['delivery_reward'] = passengers_delivered_delta * 20.0 * difficulty_factor
+        # Each passenger delivered is a huge win.
+        rewards['delivery_reward'] = passengers_delivered_delta * 50.0
 
-    # Efficiency reward - reward for efficient passenger movement
+    # 2. Time Penalty: A small cost for every step taken.
+    # This encourages the agent to achieve its goals efficiently.
+    rewards['time_penalty'] = -0.01
+
+    # 3. Waiting Penalty: Punish the agent for letting passengers wait.
+    # This encourages creating efficient routes.
     current_waiting = sum(len(s.passengers) for s in game_state.stations)
     previous_waiting = previous_metrics['total_waiting']
+    if current_waiting > previous_waiting:
+        rewards['waiting_penalty'] = -(current_waiting - previous_waiting) * 0.2
 
-    if current_waiting < previous_waiting:
-        rewards['efficiency_reward'] = (previous_waiting - current_waiting) * 0.2
-    elif current_waiting > previous_waiting:
-        rewards['penalties'] -= (current_waiting - previous_waiting) * 0.1
+    # 4. Action Penalty: Punish invalid actions to help the agent learn the rules.
+    if "INVALID" in action_result or "FAIL" in action_result:
+        rewards['action_penalty'] = -0.5
 
-    # Network quality reward - reward for well-connected networks
-    current_connected = sum(1 for station in game_state.stations
-                          if any(station in line.stations for line in game_state.lines if line.active))
-    previous_connected = previous_metrics['connected_stations']
-
-    if current_connected > previous_connected:
-        rewards['network_quality_reward'] = (current_connected - previous_connected) * 2.0
-
-    # Action quality assessment
-    if "SUCCESS" in action_result:
-        rewards['action_quality'] = 1.0
-    elif "INVALID" in action_result or "FAIL" in action_result:
-        rewards['action_quality'] = -0.5
-
-    # Calculate total with careful scaling
+    # Calculate total reward
     total_reward = (rewards['delivery_reward'] +
-                   rewards['efficiency_reward'] +
-                   rewards['network_quality_reward'] +
-                   rewards['penalties'] +
-                   rewards['action_quality'])
-
-    # Dynamic scaling based on game progress
-    progress_factor = min(1.0, game_state.week / 20.0)
-    total_reward *= (1.0 + progress_factor)  # Increase reward scaling as game progresses
+                   rewards['time_penalty'] +
+                   rewards['waiting_penalty'] +
+                   rewards['action_penalty'])
     
     return {'total': total_reward, **rewards}
+# --- CHANGE END ---

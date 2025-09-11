@@ -1,28 +1,42 @@
+# ./components/line.py
 import pygame
 import math
 import time
+from typing import List, Optional, Tuple, Dict, Any, Union
 from config import CONFIG
 
 class Line:
-    def __init__(self, color, index):
-        self.color = self._hex_to_rgb(color)
-        self.index = index
-        self.stations = []
-        self.trains = []
-        self.active = False
-        self.original_start = None
-        self.original_end = None
+    def __init__(self, color: str, index: int):
+        self.color: Tuple[int, int, int] = self._hex_to_rgb(color)
+        self.index: int = index
+        self.stations: List[Any] = []
+        self.trains: List[Any] = []
+        self.active: bool = False
+        self.original_start: Optional[Any] = None
+        self.original_end: Optional[Any] = None
     
-    def _hex_to_rgb(self, hex_color):
+    def _hex_to_rgb(self, hex_color: str) -> Tuple[int, int, int]:
         """Convert hex color to RGB tuple"""
         hex_color = hex_color.lstrip('#')
-        return tuple(int(hex_color[i:i+2], 16) for i in (0, 2, 4))
+        rgb_values = tuple(int(hex_color[i:i+2], 16) for i in (0, 2, 4))
+        return (rgb_values[0], rgb_values[1], rgb_values[2])
     
-    def add_station(self, station, insert_index=-1):
+    def add_station(self, station: Any, insert_index: int = -1) -> bool:
         """Add a station to this line"""
         if len(self.stations) == 0:
             self.original_start = station
         
+        # --- BUG FIX ---
+        # More robust check to prevent adding a station that is already an endpoint,
+        # which would create a zero-length segment.
+        if len(self.stations) > 0:
+            if insert_index == 0 and station == self.stations[0]:
+                return False # Trying to add to start, but it's already the start
+            is_append = insert_index == -1 or insert_index >= len(self.stations)
+            if is_append and station == self.stations[-1]:
+                return False # Trying to add to end, but it's already the end
+        # --- END FIX ---
+
         is_closing_loop = (
             len(self.stations) >= 2 and
             station == self.stations[0] and
@@ -51,7 +65,7 @@ class Line:
         
         return True
     
-    def remove_end_station(self, station):
+    def remove_end_station(self, station: Any) -> None:
         """Remove a station from the ends of the line"""
         if len(self.stations) < 2:
             return
@@ -90,7 +104,7 @@ class Line:
         from systems.pathfinding import mark_graph_dirty
         mark_graph_dirty()
     
-    def remove_station(self, station):
+    def remove_station(self, station: Any) -> None:
         """Remove a station from anywhere in the line"""
         indices = [i for i, s in enumerate(self.stations) if s == station]
         
@@ -120,7 +134,7 @@ class Line:
         from systems.pathfinding import mark_graph_dirty
         mark_graph_dirty()
     
-    def clear_line(self):
+    def clear_line(self) -> None:
         """Clear the entire line and return resources"""
         from state import game_state
         
@@ -148,7 +162,7 @@ class Line:
         from systems.pathfinding import mark_graph_dirty
         mark_graph_dirty()
     
-    def check_river_crossing(self, station1, station2):
+    def check_river_crossing(self, station1: Any, station2: Any) -> bool:
         """Check if line segment crosses a river"""
         from state import game_state
         
@@ -164,7 +178,7 @@ class Line:
                 return True
         return False
     
-    def _line_intersects_polygon(self, x1, y1, x2, y2, polygon_points):
+    def _line_intersects_polygon(self, x1: float, y1: float, x2: float, y2: float, polygon_points: List[Any]) -> bool:
         """Check if line intersects with polygon"""
         try:
             for i in range(len(polygon_points)):
@@ -184,7 +198,7 @@ class Line:
             print(f"Line: Error checking polygon intersection: {e}")
             return False
     
-    def _line_intersects_line(self, x1, y1, x2, y2, x3, y3, x4, y4):
+    def _line_intersects_line(self, x1: float, y1: float, x2: float, y2: float, x3: float, y3: float, x4: float, y4: float) -> bool:
         """Check if two line segments intersect"""
         denom = (x1-x2)*(y3-y4) - (y1-y2)*(x3-x4)
         if denom == 0:
@@ -195,7 +209,7 @@ class Line:
         
         return 0 < t < 1 and 0 < u < 1
     
-    def _animate_station_connection(self, station):
+    def _animate_station_connection(self, station: Any) -> None:
         """Animate station connection effect"""
         if station:
             station.connection_animation = {
@@ -203,7 +217,7 @@ class Line:
                 'duration': 300
             }
     
-    def find_insertion_point(self, station):
+    def find_insertion_point(self, station: Any) -> int:
         """Find best insertion point for a station in the line"""
         if len(self.stations) < 2:
             return -1
@@ -222,7 +236,7 @@ class Line:
         
         return insert_index
     
-    def _distance_to_line_segment(self, point, line_start, line_end):
+    def _distance_to_line_segment(self, point: Any, line_start: Any, line_end: Any) -> float:
         """Calculate distance from point to line segment"""
         A = point.x - line_start.x
         B = point.y - line_start.y
@@ -247,7 +261,7 @@ class Line:
         dy = point.y - yy
         return math.sqrt(dx * dx + dy * dy)
     
-    def draw(self, screen):
+    def draw(self, screen: pygame.Surface) -> None:
         """Draw the line on screen"""
         if len(self.stations) < 2:
             return
@@ -291,7 +305,7 @@ class Line:
                     pygame.draw.line(screen, self.color, 
                                    (start_x, start_y), (end_x, end_y), CONFIG.LINE_WIDTH)
     
-    def _draw_dashed_line(self, screen, x1, y1, x2, y2, color, width):
+    def _draw_dashed_line(self, screen: pygame.Surface, x1: float, y1: float, x2: float, y2: float, color: Tuple[int, int, int], width: int) -> None:
         """Draw a dashed line"""
         dx = x2 - x1
         dy = y2 - y1

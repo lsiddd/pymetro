@@ -1,3 +1,6 @@
+# ./systems/game.py
+
+from typing import Optional, Dict, Any, List
 import pygame
 import math
 import time
@@ -10,15 +13,22 @@ from components.train import Train
 from components.river import River
 
 class Game:
-    def __init__(self):
-        self.initialized = False
+    def __init__(self) -> None:
+        self.initialized: bool = False
     
-    def init_game(self, screen_width, screen_height):
+    # --- CHANGE START ---
+    def init_game(self, screen_width: int, screen_height: int, difficulty_stage: int = 0) -> None:
+    # --- CHANGE END ---
         """Initialize new game"""
         from state import game_state
         
         game_state.reset()
         
+        # --- CHANGE START ---
+        # Set difficulty for this episode
+        game_state.difficulty_stage = difficulty_stage
+        # --- CHANGE END ---
+
         # Create lines
         game_state.lines = []
         for i in range(game_state.max_lines):
@@ -33,7 +43,7 @@ class Game:
         
         self.initialized = True
     
-    def create_rivers(self, width, height):
+    def create_rivers(self, width: int, height: int) -> None:
         """Create rivers for the selected city"""
         from state import game_state
         
@@ -41,7 +51,7 @@ class Game:
         
         if game_state.selected_city == 'london':
             # Thames-like river
-            points = [
+            points: List[Dict[str, float]] = [
                 {'x': 0, 'y': height * 0.65},
                 {'x': width * 0.3, 'y': height * 0.55},
                 {'x': width * 0.7, 'y': height * 0.6},
@@ -53,7 +63,7 @@ class Game:
             ]
             game_state.rivers.append(River(points))
     
-    def create_initial_stations(self, width, height):
+    def create_initial_stations(self, width: int, height: int) -> None:
         """Create initial stations"""
         from state import game_state
         
@@ -89,13 +99,14 @@ class Game:
                 offset_y = (random.random() - 0.5) * 50
                 game_state.stations.append(Station(center_x + offset_x, center_y + offset_y, station_type))
     
-    def update(self, delta_time, screen_width, screen_height):
+    def update(self, delta_time: float, screen_width: int, screen_height: int) -> Optional[str]:
         """Update game logic"""
         from state import game_state
         
+        
         if not self.initialized or game_state.game_over or game_state.paused:
             return
-        
+
         current_time = time.time() * 1000
         
         # Update week/day progression
@@ -107,10 +118,17 @@ class Game:
             game_state.week_start_time = current_time
             return 'show_upgrades'
         
-        # Progressive difficulty scaling
+        # --- CHANGE START ---
+        # Progressive difficulty scaling using curriculum learning stage
+        difficulty_settings = CONFIG.DIFFICULTY_LEVELS[game_state.difficulty_stage]
         difficulty_multiplier = CONFIG.DIFFICULTY_SCALE_FACTOR ** (game_state.week - 1)
-        current_spawn_rate = CONFIG.BASE_SPAWN_RATE * difficulty_multiplier
-        current_station_spawn_rate = CONFIG.BASE_STATION_SPAWN_RATE * difficulty_multiplier
+        
+        passenger_multiplier = difficulty_settings['passenger_spawn_multiplier']
+        station_multiplier = difficulty_settings['station_spawn_multiplier']
+
+        current_spawn_rate = CONFIG.BASE_SPAWN_RATE * difficulty_multiplier * passenger_multiplier
+        current_station_spawn_rate = CONFIG.BASE_STATION_SPAWN_RATE * difficulty_multiplier * station_multiplier
+        # --- CHANGE END ---
         
         # Spawn passengers
         if current_time - game_state.last_spawn_time > current_spawn_rate / game_state.speed:
@@ -125,7 +143,7 @@ class Game:
         # Update trains
         for train in game_state.trains:
             train.update(delta_time)
-        
+
         # Check game over condition
         if self.check_game_over():
             game_state.game_over = True
@@ -134,7 +152,7 @@ class Game:
         
         return None
     
-    def spawn_passenger(self):
+    def spawn_passenger(self) -> None:
         """Spawn a new passenger at a random station"""
         from state import game_state
         
@@ -153,7 +171,7 @@ class Game:
             station.add_passenger(passenger)
             game_state.passengers.append(passenger)
     
-    def spawn_station(self, screen_width, screen_height):
+    def spawn_station(self, screen_width: int, screen_height: int) -> None:
         """Spawn a new station"""
         from state import game_state
         
@@ -177,7 +195,7 @@ class Game:
         
         print("Warning: Could not find valid position for new station")
     
-    def get_new_station_type(self):
+    def get_new_station_type(self) -> str:
         """Determine type for new station"""
         from state import game_state
         
@@ -198,7 +216,7 @@ class Game:
         
         return random.choice(basic_types)
     
-    def check_game_over(self):
+    def check_game_over(self) -> bool:
         """Check if game over conditions are met"""
         from state import game_state
         
@@ -211,7 +229,7 @@ class Game:
         
         return False
     
-    def render(self, screen):
+    def render(self, screen: pygame.Surface) -> None:
         """Render the game world"""
         from state import game_state
         from systems.input import InputHandler

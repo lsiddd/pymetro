@@ -1,5 +1,6 @@
 # ./rl_agent/action.py
 import numpy as np
+# Removed unused import
 from state import game_state
 from components.train import Train
 from rl_agent.state import MAX_STATIONS, MAX_LINES
@@ -11,9 +12,9 @@ from rl_agent.state import MAX_STATIONS, MAX_LINES
 # (1 + MAX_LINES*2) to (1 + MAX_LINES*3 - 1): remove_line(line_idx)
 # ...and so on for line extensions
 
-ACTION_SIZE = 1 + (MAX_LINES * 3) + (MAX_LINES * MAX_STATIONS * 2)
+ACTION_SIZE: int = 1 + (MAX_LINES * 3) + (MAX_LINES * MAX_STATIONS * 2)
 
-def perform_action(action_index):
+def perform_action(action_index: int) -> str:
     """Executes the action corresponding to the given index."""
     
     if action_index == 0:
@@ -52,7 +53,7 @@ def perform_action(action_index):
     return "INVALID_ACTION_INDEX"
 
 
-def get_valid_actions():
+def get_valid_actions() -> np.ndarray:
     """
     Returns a boolean numpy array of size ACTION_SIZE indicating valid actions.
     This is the core of the action masking logic.
@@ -128,7 +129,7 @@ def get_valid_actions():
 
 # --- Action Implementation Functions (largely unchanged) ---
 
-def add_train_to_line(line_idx):
+def add_train_to_line(line_idx: int) -> str:
     if game_state.available_trains <= 0 or line_idx >= len(game_state.lines): return "INVALID"
     line = game_state.lines[line_idx]
     if not line.active: return "INVALID"
@@ -138,7 +139,7 @@ def add_train_to_line(line_idx):
     line.trains.append(new_train)
     return "SUCCESS_ADD_TRAIN"
 
-def add_carriage_to_line(line_idx):
+def add_carriage_to_line(line_idx: int) -> str:
     if game_state.carriages <= 0 or line_idx >= len(game_state.lines): return "INVALID"
     line = game_state.lines[line_idx]
     if not line.trains: return "INVALID"
@@ -149,7 +150,7 @@ def add_carriage_to_line(line_idx):
             return "SUCCESS_ADD_CARRIAGE"
     return "INVALID" # All trains on line have carriages
 
-def remove_line(line_idx):
+def remove_line(line_idx: int) -> str:
     if line_idx >= len(game_state.lines): return "INVALID"
     line = game_state.lines[line_idx]
     if not line.active: return "INVALID"
@@ -157,7 +158,7 @@ def remove_line(line_idx):
     # Graph is marked dirty inside clear_line()
     return "SUCCESS_REMOVE_LINE"
 
-def extend_line(line_idx, to_station_idx, from_start):
+def extend_line(line_idx: int, to_station_idx: int, from_start: bool) -> str:
     if line_idx >= game_state.available_lines or to_station_idx >= len(game_state.stations):
         return "INVALID"
     
@@ -177,6 +178,12 @@ def extend_line(line_idx, to_station_idx, from_start):
     # Case 2: Extend an existing line
     else:
         from_station = line.stations[0] if from_start else line.stations[-1]
+        # --- BUG FIX ---
+        # Add an explicit check to prevent extending a line to the same station it's already at.
+        # This prevents creating a zero-length segment like [S0, S0].
+        if from_station == target_station:
+            return "INVALID_DUPLICATE_ENDPOINT"
+        # --- END FIX ---
 
     needs_bridge = line.check_river_crossing(from_station, target_station)
     if needs_bridge and game_state.bridges <= 0: return "FAIL_NO_BRIDGE"
