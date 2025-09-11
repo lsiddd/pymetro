@@ -14,10 +14,10 @@ class RLAgentConfig:
         # --- Learning Hyperparameters ---
         
         # Large replay buffer for diverse experiences
-        self.BUFFER_SIZE = int(1e6)  # Increased to 1M for better sample diversity
+        self.BUFFER_SIZE = int(1e5)  # Increased to 1M for better sample diversity
         
         # Larger batch size for stable gradient updates
-        self.BATCH_SIZE = 128
+        self.BATCH_SIZE = 64
         
         # Standard discount factor
         self.GAMMA = 0.99

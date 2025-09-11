@@ -27,7 +27,8 @@ def watch_agent(checkpoint_path='checkpoint.pth', episodes=5):
 
     # Load the trained weights
     try:
-        agent.qnetwork_local.load_state_dict(torch.load(checkpoint_path))
+        agent.qnetwork_local.load_state_dict(torch.load(checkpoint_path, map_location=torch.device('cpu')))
+
         print(f"Successfully loaded model weights from {checkpoint_path}")
     except FileNotFoundError:
         print(f"Error: Could not find checkpoint file at {checkpoint_path}")

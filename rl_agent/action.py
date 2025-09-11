@@ -154,6 +154,7 @@ def remove_line(line_idx):
     line = game_state.lines[line_idx]
     if not line.active: return "INVALID"
     line.clear_line()
+    # Graph is marked dirty inside clear_line()
     return "SUCCESS_REMOVE_LINE"
 
 def extend_line(line_idx, to_station_idx, from_start):

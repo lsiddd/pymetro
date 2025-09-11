@@ -41,7 +41,6 @@ def train_parallel(config: TrainingConfig, agent_config: RLAgentConfig, num_work
 
     # Training metrics
     scores_window = deque(maxlen=100)
-    eps = config.EPS_START
     last_save_time = time.time()
     
     # Episode tracking
@@ -61,8 +60,8 @@ def train_parallel(config: TrainingConfig, agent_config: RLAgentConfig, num_work
     
     # --- TRAINING LOOP ---
     while episode_count < config.N_EPISODES:
-        # Get actions for all environments
-        actions = agent.act_batch(states, valid_actions_masks, eps)
+        # Get actions for all environments (using noisy networks)
+        actions = agent.act_batch(states, valid_actions_masks)
         
         # Step all environments
         next_states, next_valid_actions_masks, experiences, reward_details_list, dones, infos = parallel_envs.step_all(actions)
@@ -100,7 +99,7 @@ def train_parallel(config: TrainingConfig, agent_config: RLAgentConfig, num_work
                 writer.add_scalar('Game/Passengers Delivered', final_passengers, episode_count)
                 writer.add_scalar('Game/Final Score', final_score, episode_count)
                 writer.add_scalar('Game/Days Survived', days_survived, episode_count)
-                writer.add_scalar('Agent/Epsilon', eps, episode_count)
+                writer.add_scalar('Agent/Replay_Buffer_Size', len(agent.memory), episode_count)
                 writer.add_scalar('Agent/Episode Length (steps)', worker_episode_steps[i], episode_count)
                 writer.add_scalar('Agent/Valid Actions Count', infos[i].get('valid_actions_count', 0), episode_count)
                 
@@ -111,16 +110,16 @@ def train_parallel(config: TrainingConfig, agent_config: RLAgentConfig, num_work
                     writer.add_histogram('Agent/Q-Values', agent.last_q_values, episode_count)
                 
                 # --- CONSOLE LOGGING ---
-                if episode_count % 10 == 0 or len(scores_window) <= 10:
-                    print_str = (
-                        f"Episode {episode_count:4d}\t"
-                        f"Avg Reward: {np.mean(scores_window):7.2f}\t"
-                        f"Passengers: {final_passengers:3d}\t"
-                        f"Days: {days_survived:3d}\t"
-                        f"Epsilon: {eps:.4f}\t"
-                        f"Workers: {num_workers}"
-                    )
-                    print(f'\r{print_str}', end="")
+                # if episode_count % 10 == 0 or len(scores_window) <= 10:
+                print_str = (
+                    f"Episode {episode_count:4d}\t"
+                    f"Avg Reward: {np.mean(scores_window):7.2f}\t"
+                    f"Passengers: {final_passengers:3d}\t"
+                    f"Days: {days_survived:3d}\t"
+                    f"Buffer: {len(agent.memory):6d}\t"
+                    f"Workers: {num_workers}"
+                )
+                print(f'\r{print_str}', end="")
                 
                 if episode_count % 100 == 0:
                     print(f'\r{print_str}')  # New line every 100 episodes
@@ -144,12 +143,8 @@ def train_parallel(config: TrainingConfig, agent_config: RLAgentConfig, num_work
                 new_state, new_valid_actions = parallel_envs.reset_worker(i)
                 states[i] = new_state
                 valid_actions_masks[i] = new_valid_actions
-                
-                # Decay epsilon only when an episode completes
-                eps = max(config.EPS_END, config.EPS_DECAY * eps)
         
-        # Decay epsilon only when episodes complete, not every step
-        # This was moved inside the episode completion logic above
+        # No epsilon decay needed - using noisy networks for exploration
         
         # Check if we should stop training
         if episode_count >= config.N_EPISODES:
@@ -167,7 +162,7 @@ def train_parallel(config: TrainingConfig, agent_config: RLAgentConfig, num_work
 if __name__ == '__main__':
     # Number of parallel workers (adjust based on your CPU cores)
     # Typically use 2-8 workers for optimal performance
-    num_parallel_workers = 4
+    num_parallel_workers = 6
     
     # Configuration
     train_config = TrainingConfig()

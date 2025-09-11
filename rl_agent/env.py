@@ -44,8 +44,8 @@ class MiniMetroEnv:
 
         # 2. Update Game State
         # Simulate a few frames for the action's effect to be measurable
-        num_frames_to_simulate = 30 
-        delta_time = 16.67 # Corresponds to 60 FPS
+        num_frames_to_simulate = 30.0
+        delta_time = 16.6667 # Corresponds to 60 FPS
         
         for _ in range(num_frames_to_simulate):
             if self.game_state.game_over:

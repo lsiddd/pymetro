@@ -44,6 +44,11 @@ class Line:
         
         self.active = len(self.stations) >= 2
         self._animate_station_connection(station)
+        
+        # Mark pathfinding graph as dirty
+        from systems.pathfinding import mark_graph_dirty
+        mark_graph_dirty()
+        
         return True
     
     def remove_end_station(self, station):
@@ -80,6 +85,10 @@ class Line:
             self.clear_line()
         else:
             self.active = True
+            
+        # Mark pathfinding graph as dirty
+        from systems.pathfinding import mark_graph_dirty
+        mark_graph_dirty()
     
     def remove_station(self, station):
         """Remove a station from anywhere in the line"""
@@ -106,6 +115,10 @@ class Line:
         self.active = len(self.stations) >= 2
         if not self.active:
             self.clear_line()
+            
+        # Mark pathfinding graph as dirty
+        from systems.pathfinding import mark_graph_dirty
+        mark_graph_dirty()
     
     def clear_line(self):
         """Clear the entire line and return resources"""
@@ -130,6 +143,10 @@ class Line:
         self.active = False
         self.original_start = None
         self.original_end = None
+        
+        # Mark pathfinding graph as dirty
+        from systems.pathfinding import mark_graph_dirty
+        mark_graph_dirty()
     
     def check_river_crossing(self, station1, station2):
         """Check if line segment crosses a river"""

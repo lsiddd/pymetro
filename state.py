@@ -38,6 +38,13 @@ class GameState:
         city_config = CONFIG.CITIES[self.selected_city]
         self.bridges = city_config['bridges']
         self.max_lines = city_config['maxLines']
+        
+        # Mark pathfinding graph as dirty after reset
+        try:
+            from systems.pathfinding import mark_graph_dirty
+            mark_graph_dirty()
+        except ImportError:
+            pass  # Pathfinding module might not be loaded yet
     
     def set_city(self, city):
         """Set selected city and update configuration"""
