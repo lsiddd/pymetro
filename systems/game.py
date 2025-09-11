@@ -1,6 +1,5 @@
 # ./systems/game.py
 
-from typing import Optional, Dict, Any, List
 import pygame
 import math
 import time
@@ -13,11 +12,11 @@ from components.train import Train
 from components.river import River
 
 class Game:
-    def __init__(self) -> None:
-        self.initialized: bool = False
+    def __init__(self):
+        self.initialized = False
     
     # --- CHANGE START ---
-    def init_game(self, screen_width: int, screen_height: int, difficulty_stage: int = 0) -> None:
+    def init_game(self, screen_width, screen_height, difficulty_stage=0):
     # --- CHANGE END ---
         """Initialize new game"""
         from state import game_state
@@ -43,7 +42,7 @@ class Game:
         
         self.initialized = True
     
-    def create_rivers(self, width: int, height: int) -> None:
+    def create_rivers(self, width, height):
         """Create rivers for the selected city"""
         from state import game_state
         
@@ -51,7 +50,7 @@ class Game:
         
         if game_state.selected_city == 'london':
             # Thames-like river
-            points: List[Dict[str, float]] = [
+            points = [
                 {'x': 0, 'y': height * 0.65},
                 {'x': width * 0.3, 'y': height * 0.55},
                 {'x': width * 0.7, 'y': height * 0.6},
@@ -63,7 +62,7 @@ class Game:
             ]
             game_state.rivers.append(River(points))
     
-    def create_initial_stations(self, width: int, height: int) -> None:
+    def create_initial_stations(self, width, height):
         """Create initial stations"""
         from state import game_state
         
@@ -99,7 +98,7 @@ class Game:
                 offset_y = (random.random() - 0.5) * 50
                 game_state.stations.append(Station(center_x + offset_x, center_y + offset_y, station_type))
     
-    def update(self, delta_time: float, screen_width: int, screen_height: int) -> Optional[str]:
+    def update(self, delta_time, screen_width, screen_height):
         """Update game logic"""
         from state import game_state
         
@@ -141,8 +140,15 @@ class Game:
             game_state.last_station_spawn_time = current_time
         
         # Update trains
-        for train in game_state.trains:
+        for train in game_state.trains[:]: # Use a copy in case a train removes itself
             train.update(delta_time)
+
+        # --- CHANGE START ---
+        # Finalize deletion of empty lines that were marked
+        for line in game_state.lines:
+            if line.marked_for_deletion and not line.trains:
+                line.clear_line()
+        # --- CHANGE END ---
 
         # Check game over condition
         if self.check_game_over():
@@ -152,7 +158,7 @@ class Game:
         
         return None
     
-    def spawn_passenger(self) -> None:
+    def spawn_passenger(self):
         """Spawn a new passenger at a random station"""
         from state import game_state
         
@@ -171,7 +177,7 @@ class Game:
             station.add_passenger(passenger)
             game_state.passengers.append(passenger)
     
-    def spawn_station(self, screen_width: int, screen_height: int) -> None:
+    def spawn_station(self, screen_width, screen_height):
         """Spawn a new station"""
         from state import game_state
         
@@ -195,7 +201,7 @@ class Game:
         
         print("Warning: Could not find valid position for new station")
     
-    def get_new_station_type(self) -> str:
+    def get_new_station_type(self):
         """Determine type for new station"""
         from state import game_state
         
@@ -216,7 +222,7 @@ class Game:
         
         return random.choice(basic_types)
     
-    def check_game_over(self) -> bool:
+    def check_game_over(self):
         """Check if game over conditions are met"""
         from state import game_state
         
@@ -229,7 +235,7 @@ class Game:
         
         return False
     
-    def render(self, screen: pygame.Surface) -> None:
+    def render(self, screen):
         """Render the game world"""
         from state import game_state
         from systems.input import InputHandler

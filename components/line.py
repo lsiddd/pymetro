@@ -12,6 +12,9 @@ class Line:
         self.stations: List[Any] = []
         self.trains: List[Any] = []
         self.active: bool = False
+        # --- CHANGE START ---
+        self.marked_for_deletion: bool = False
+        # --- CHANGE END ---
         self.original_start: Optional[Any] = None
         self.original_end: Optional[Any] = None
     
@@ -95,10 +98,12 @@ class Line:
         except ValueError:
             pass  # Station not in list
         
+        # --- CHANGE START ---
         if len(self.stations) < 2:
-            self.clear_line()
+            self.marked_for_deletion = True
         else:
             self.active = True
+        # --- CHANGE END ---
             
         # Mark pathfinding graph as dirty
         from systems.pathfinding import mark_graph_dirty
@@ -127,8 +132,10 @@ class Line:
             self.stations.pop(indices[0])
         
         self.active = len(self.stations) >= 2
+        # --- CHANGE START ---
         if not self.active:
-            self.clear_line()
+            self.marked_for_deletion = True
+        # --- CHANGE END ---
             
         # Mark pathfinding graph as dirty
         from systems.pathfinding import mark_graph_dirty
@@ -155,6 +162,9 @@ class Line:
         self.stations = []
         self.trains = []
         self.active = False
+        # --- CHANGE START ---
+        self.marked_for_deletion = False
+        # --- CHANGE END ---
         self.original_start = None
         self.original_end = None
         
@@ -263,8 +273,10 @@ class Line:
     
     def draw(self, screen: pygame.Surface) -> None:
         """Draw the line on screen"""
-        if len(self.stations) < 2:
+        # --- CHANGE START ---
+        if (len(self.stations) < 2 and not self.marked_for_deletion) or not self.active:
             return
+        # --- CHANGE END ---
         
         from state import game_state
         
@@ -296,14 +308,29 @@ class Line:
                 # Check if crosses river
                 crosses_river = self.check_river_crossing(s1, s2)
                 
+                # --- CHANGE START ---
+                # Use a faded color if marked for deletion
+                line_color = self.color
+                if self.marked_for_deletion:
+                    line_color = (
+                        int(self.color[0] * 0.5 + 128 * 0.5),
+                        int(self.color[1] * 0.5 + 128 * 0.5),
+                        int(self.color[2] * 0.5 + 128 * 0.5)
+                    )
+
                 if crosses_river:
                     # Draw dashed line for bridge
                     self._draw_dashed_line(screen, start_x, start_y, end_x, end_y, 
-                                         self.color, int(CONFIG.LINE_WIDTH * 0.8))
+                                         line_color, int(CONFIG.LINE_WIDTH * 0.8))
+                elif self.marked_for_deletion:
+                    # Always draw marked lines as dashed
+                    self._draw_dashed_line(screen, start_x, start_y, end_x, end_y,
+                                         line_color, CONFIG.LINE_WIDTH)
                 else:
                     # Draw solid line
-                    pygame.draw.line(screen, self.color, 
+                    pygame.draw.line(screen, line_color, 
                                    (start_x, start_y), (end_x, end_y), CONFIG.LINE_WIDTH)
+                # --- CHANGE END ---
     
     def _draw_dashed_line(self, screen: pygame.Surface, x1: float, y1: float, x2: float, y2: float, color: Tuple[int, int, int], width: int) -> None:
         """Draw a dashed line"""

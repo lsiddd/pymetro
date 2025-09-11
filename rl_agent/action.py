@@ -154,7 +154,9 @@ def remove_line(line_idx: int) -> str:
     if line_idx >= len(game_state.lines): return "INVALID"
     line = game_state.lines[line_idx]
     if not line.active: return "INVALID"
-    line.clear_line()
+    # --- CHANGE START ---
+    line.marked_for_deletion = True
+    # --- CHANGE END ---
     # Graph is marked dirty inside clear_line()
     return "SUCCESS_REMOVE_LINE"
 

@@ -1,3 +1,4 @@
+# ./systems/ui.py
 import pygame
 import math
 import time
@@ -41,6 +42,9 @@ class UI:
         self.pause_btn_rect = pygame.Rect(self.width - 100, 10, 40, 40)
         self.speed_btn_rect = pygame.Rect(self.width - 50, 10, 40, 40)
         self.line_selector_rects = []
+        # --- CHANGE START ---
+        self.line_delete_rects = [] # To store the positions of the 'x' buttons
+        # --- CHANGE END ---
         self.city_btn_rects = {}
         self.start_btn_rect = None
         self.restart_btn_rect = None
@@ -253,6 +257,9 @@ class UI:
         
         # Line buttons
         self.line_selector_rects = []
+        # --- CHANGE START ---
+        self.line_delete_rects = [] # Reset the list each frame
+        # --- CHANGE END ---
         for i in range(game_state.available_lines):
             x = self.width//2 - (game_state.available_lines * 30) + i * 60 + 30
             y = self.height - 50
@@ -271,12 +278,18 @@ class UI:
             # Delete button for active lines
             line = game_state.lines[i]
             if line.active and len(line.stations) > 0:
-                delete_rect = pygame.Rect(x + 12, y - 18, 16, 16)
-                pygame.draw.circle(self.screen, (231, 76, 60), (x + 16, y - 12), 8)
-                pygame.draw.circle(self.screen, (255, 255, 255), (x + 16, y - 12), 8, 2)
+                delete_center_x = x + 16
+                delete_center_y = y - 12
+                delete_rect = pygame.Rect(delete_center_x - 8, delete_center_y - 8, 16, 16)
+                # --- CHANGE START ---
+                self.line_delete_rects.append((delete_rect, i)) # Store rect and line index
+                # --- CHANGE END ---
+                
+                pygame.draw.circle(self.screen, (231, 76, 60), (delete_center_x, delete_center_y), 8)
+                pygame.draw.circle(self.screen, (255, 255, 255), (delete_center_x, delete_center_y), 8, 2)
                 
                 delete_text = self.small_font.render("×", True, (255, 255, 255))
-                delete_text_rect = delete_text.get_rect(center=(x + 16, y - 12))
+                delete_text_rect = delete_text.get_rect(center=(delete_center_x, delete_center_y))
                 self.screen.blit(delete_text, delete_text_rect)
     
     def draw_upgrade_modal(self):
@@ -450,6 +463,16 @@ class UI:
         if self.speed_btn_rect.collidepoint(pos):
             game_state.speed = 2.5 if game_state.speed == 1 else 1
             return True
+        
+        # --- CHANGE START ---
+        # Line delete buttons
+        for rect, line_index in self.line_delete_rects:
+            if rect.collidepoint(pos):
+                line = game_state.lines[line_index]
+                if line.active:
+                    line.marked_for_deletion = True
+                    return True # Click was handled
+        # --- CHANGE END ---
         
         # Line selector
         for i, rect in enumerate(self.line_selector_rects):

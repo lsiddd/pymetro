@@ -105,6 +105,32 @@ class Train:
             self.x = next_station.x
             self.y = next_station.y
             self.current_station_index = self.next_station_index
+
+            # --- CHANGE START ---
+            # Graceful deletion logic
+            is_at_terminal = not self.is_loop and (self.current_station_index == 0 or self.current_station_index >= len(self.line.stations) - 1)
+            if self.line.marked_for_deletion and is_at_terminal:
+                # Unload all remaining passengers
+                for p in self.passengers:
+                    p.on_train = None
+                    p.start_transfer(next_station)
+                    next_station.add_passenger(p)
+                self.passengers.clear()
+                
+                # Remove self from the game and return resources
+                if self in game_state.trains:
+                    game_state.trains.remove(self)
+                if self in self.line.trains:
+                    self.line.trains.remove(self)
+                
+                game_state.available_trains += 1
+                if self.has_carriage:
+                    game_state.carriages += 1
+                
+                # Stop any further processing for this decommissioned train
+                return
+            # --- CHANGE END ---
+
             self.process_passengers(next_station)
             self.speed = 0
         else:
@@ -147,7 +173,10 @@ class Train:
 
         # Board new passengers
         available_space = self.total_capacity - len(self.passengers)
-        if available_space > 0:
+        # --- CHANGE START ---
+        # Prevent boarding if the line is being deleted
+        if available_space > 0 and not self.line.marked_for_deletion:
+        # --- CHANGE END ---
             upcoming_stops = self.get_upcoming_stops(station, single_direction_only=True)
             
             for passenger in station.passengers:
