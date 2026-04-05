@@ -425,27 +425,22 @@ class InputHandler:
     
     def draw_preview(self, screen):
         """Draw line preview with smooth animation, or drag ghost for resources."""
-        # Draw resource drag ghost
-        drag_icon = None
-        if self.dragged_train_resource:
-            drag_icon = '🚂'
+        # Draw resource drag ghost using pygame shapes
+        drag_key = None
+        if self.dragged_train_resource or self.dragged_existing_train:
+            drag_key = 'train'
         elif self.dragged_carriage:
-            drag_icon = '🚃'
+            drag_key = 'carriage'
         elif self.dragged_interchange:
-            drag_icon = '⭕'
-        elif self.dragged_existing_train:
-            drag_icon = '🚂'
+            drag_key = 'interchange'
 
-        if drag_icon:
-            # Lazy-init a small font for the ghost; reuse pygame default to avoid loading files
-            font = pygame.font.Font(None, 32)
-            surf = font.render(drag_icon, True, (51, 51, 51))
-            ghost = pygame.Surface(surf.get_size(), pygame.SRCALPHA)
-            ghost.fill((0, 0, 0, 0))
-            ghost.blit(surf, (0, 0))
-            ghost.set_alpha(180)
+        if drag_key:
             mx, my = self.mouse_pos
-            screen.blit(ghost, (mx - surf.get_width() // 2, my - surf.get_height() // 2))
+            ghost = pygame.Surface((40, 40), pygame.SRCALPHA)
+            ghost.fill((220, 235, 255, 160))
+            pygame.draw.rect(ghost, (50, 120, 200), ghost.get_rect(), 2, border_radius=4)
+            self._draw_ghost_icon(ghost, drag_key, 20, 20)
+            screen.blit(ghost, (mx - 20, my - 20))
             return
 
         if not self.preview_line:
@@ -483,6 +478,24 @@ class InputHandler:
         screen.blit(preview_surface, (0, 0))
 
     
+    def _draw_ghost_icon(self, surface, key, cx, cy):
+        """Draw a small resource icon onto a surface (used for drag ghost)."""
+        dark = (51, 51, 51)
+        if key == 'train':
+            pygame.draw.rect(surface, dark, (cx - 8, cy - 5, 16, 9), border_radius=2)
+            pygame.draw.circle(surface, dark, (cx - 5, cy + 5), 3)
+            pygame.draw.circle(surface, dark, (cx + 4, cy + 5), 3)
+            pygame.draw.circle(surface, (255, 255, 255), (cx - 5, cy + 5), 2)
+            pygame.draw.circle(surface, (255, 255, 255), (cx + 4, cy + 5), 2)
+        elif key == 'carriage':
+            pygame.draw.rect(surface, dark, (cx - 6, cy - 4, 13, 8), border_radius=2)
+            pygame.draw.circle(surface, dark, (cx - 4, cy + 4), 2)
+            pygame.draw.circle(surface, dark, (cx + 3, cy + 4), 2)
+            pygame.draw.line(surface, dark, (cx - 9, cy), (cx - 6, cy), 2)
+        elif key == 'interchange':
+            pygame.draw.circle(surface, dark, (cx, cy), 8, 2)
+            pygame.draw.circle(surface, dark, (cx, cy), 3)
+
     def _draw_dashed_line(self, surface, x1, y1, x2, y2, color, width):
         """Draw a dashed line (matching JS version style)"""
         dx = x2 - x1
