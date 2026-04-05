@@ -6,10 +6,9 @@ class Chromosome:
     Representation of the metro network for the Genetic Algorithm.
     """
     def __init__(self, num_lines: int):
-        # List of lists. Each inner list represents a line and contains station instances (or IDs).
-        # We will use the actual Station objects for simplicity in calculating distances, 
-        # since their positions are static.
-        self.lines: List[List[Any]] = [[] for _ in range(num_lines)]
+        # List of lists. Each inner list represents a line and contains station IDs.
+        # IDs are used instead of explicit object references to allow efficient pickling for ProcessPoolExecutor.
+        self.lines: List[List[int]] = [[] for _ in range(num_lines)]
         
         # Resources per line
         self.trains_per_line: List[int] = [0 for _ in range(num_lines)]

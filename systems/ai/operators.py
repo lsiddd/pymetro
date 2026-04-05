@@ -11,10 +11,12 @@ def generate_initial_population(N: int, game_state: Any) -> List[Chromosome]:
     # Weights for station types
     special_types = STATION_TYPES.special_types()
     weights = {}
+    station_map = {s.id: s for s in game_state.stations}
+    
     for station in game_state.stations:
         weight = 10 if station.type in special_types else 1
         weight += len(station.passengers) * 2  # high queue -> high prior
-        weights[station] = weight
+        weights[station.id] = weight
 
     total_trains = game_state.available_trains + sum(len(line.trains) for line in game_state.lines)
     total_carriages = game_state.carriages
@@ -45,12 +47,13 @@ def generate_initial_population(N: int, game_state: Any) -> List[Chromosome]:
             # Remove duplicates for initial
             selected = list(set(selected))
             
-            # Neartest neighbor ordering
+            # Nearest neighbor ordering using ID mapping
             if selected:
                 ordered = [selected.pop(0)]
                 while selected:
                     last = ordered[-1]
-                    next_s = min(selected, key=lambda s: math.hypot(s.x - last.x, s.y - last.y))
+                    s_last = station_map[last]
+                    next_s = min(selected, key=lambda s_id: math.hypot(station_map[s_id].x - s_last.x, station_map[s_id].y - s_last.y))
                     selected.remove(next_s)
                     ordered.append(next_s)
                 c.lines[i] = ordered
@@ -117,7 +120,10 @@ def edge_assembly_crossover(parent_a: Chromosome, parent_b: Chromosome, pc: floa
             for s in line_b:
                 if s not in new_line:
                     new_line.append(s)
-            child.lines[i] = new_line
+            
+            # Limite do tamanho da linha para evitar linhas gigantes
+            MAX_STATIONS = 10
+            child.lines[i] = new_line[:MAX_STATIONS]
         else:
             child.lines[i] = line_a[:] if random.random() < 0.5 else line_b[:]
     
@@ -125,12 +131,14 @@ def edge_assembly_crossover(parent_a: Chromosome, parent_b: Chromosome, pc: floa
     return child
 
 def mutate(c: Chromosome, game_state: Any):
+    station_map = {s.id: s for s in game_state.stations}
+    
     for i in range(len(c.lines)):
         if not c.lines[i]: continue
         
         # 1. Insertion
         if random.random() < 0.15:
-            available = [s for s in game_state.stations if s not in c.lines[i]]
+            available = [s.id for s in game_state.stations if s.id not in c.lines[i]]
             if available:
                 s_new = random.choice(available)
                 best_cost = float('inf')
@@ -139,7 +147,8 @@ def mutate(c: Chromosome, game_state: Any):
                     temp_line = c.lines[i][:idx] + [s_new] + c.lines[i][idx:]
                     cost = 0
                     for j in range(len(temp_line) - 1):
-                        cost += math.hypot(temp_line[j].x - temp_line[j+1].x, temp_line[j].y - temp_line[j+1].y)
+                        s1, s2 = station_map[temp_line[j]], station_map[temp_line[j+1]]
+                        cost += math.hypot(s1.x - s2.x, s1.y - s2.y)
                     if cost < best_cost:
                         best_cost = cost
                         best_idx = idx

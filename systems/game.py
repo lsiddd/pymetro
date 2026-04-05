@@ -170,7 +170,7 @@ class Game:
             game_state.last_spawn_time = current_time
         
         # Spawn stations
-        if current_time - game_state.last_station_spawn_time > current_station_spawn_rate / game_state.speed:
+        if game_state.spawn_stations_enabled and current_time - game_state.last_station_spawn_time > current_station_spawn_rate / game_state.speed:
             self.spawn_station(screen_width, screen_height)
             game_state.last_station_spawn_time = current_time
         

@@ -26,21 +26,22 @@ class LiteTrain:
         self.speed = 150.0  # Approx speed logic abstraction
 
 class LiteSimulation:
-    def __init__(self, stations, chromosome, seed: int):
+    def __init__(self, stations_data, chromosome, seed: int):
         self.rand = random.Random(seed)
+        self.is_loop = chromosome.is_loop[:]
         
         # 1. Copy stations
         self.stations: Dict[int, LiteStation] = {}
-        for s in stations:
-            self.stations[s.id] = LiteStation(s.id, s.type, s.x, s.y)
+        for s_data in stations_data:
+            self.stations[s_data['id']] = LiteStation(s_data['id'], s_data['type'], s_data['x'], s_data['y'])
             # Inherit current passengers to simulate immediate queue impact
-            for p in s.passengers:
-                self.stations[s.id].passengers.append(p.destination)
+            for p_dest in s_data['passengers']:
+                self.stations[s_data['id']].passengers.append(p_dest)
 
         # 2. Extract lines from chromosome
         self.lines: Dict[int, List[int]] = {}
         for line_id, line_stations in enumerate(chromosome.lines):
-            self.lines[line_id] = [s.id for s in line_stations]
+            self.lines[line_id] = line_stations[:]
 
         # 3. Create trains based on resource allocation
         self.trains: List[LiteTrain] = []
@@ -85,12 +86,14 @@ class LiteSimulation:
                         t.state = 'MOVING'
                         
                         # Next station logic
-                        if t.current_station_idx >= len(line_path) - 1:
-                            t.direction = -1
-                        elif t.current_station_idx <= 0:
-                            t.direction = 1
-                        
-                        t.next_station_idx = t.current_station_idx + t.direction
+                        if self.is_loop[t.line_id]:
+                            t.next_station_idx = (t.current_station_idx + t.direction) % len(line_path)
+                        else:
+                            if t.current_station_idx >= len(line_path) - 1:
+                                t.direction = -1
+                            elif t.current_station_idx <= 0:
+                                t.direction = 1
+                            t.next_station_idx = t.current_station_idx + t.direction
                         t.progress = 0.0
                 elif t.state == 'MOVING':
                     s_current = self.stations[line_path[t.current_station_idx]]
@@ -141,12 +144,12 @@ class LiteSimulation:
                 self.ticks_no_overcrowd += 1
 
 
-def calculate_fitness(chromosome: Any, game_state: Any, seed: int, H: int) -> float:
+def calculate_fitness(chromosome: Any, stations_data: List[Dict], seed: int, H: int) -> float:
     """
     Evaluates the chromosome via headless simulation.
     F = w1*ticks - w2*queue_sum - w3*fragility - w4*cost
     """
-    sim = LiteSimulation(game_state.stations, chromosome, seed)
+    sim = LiteSimulation(stations_data, chromosome, seed)
     
     # Run 50 ms ticks for H iterations
     sim.tick(delta_time=50.0, H=H)
@@ -155,8 +158,35 @@ def calculate_fitness(chromosome: Any, game_state: Any, seed: int, H: int) -> fl
     w2 = 1.0
     w3 = 5.0
     w4 = 50.0
+    w5 = 500.0 # Penalty per active line without trains
+    
+    # Penalidades configuráveis para tamanho de linha
+    w_length = 0.05          # Fator de penalidade por pixel (ex: 1000px = -50 pontos)
+    w_excess_stations = 25.0 # Penalidade por cada estação além de 6 numa mesma linha
     
     cost = sum(chromosome.trains_per_line) + sum(chromosome.carriages_per_line)
+    empty_lines = sum(1 for i in range(len(chromosome.lines)) if len(chromosome.lines[i]) >= 2 and chromosome.trains_per_line[i] == 0)
     
-    fitness = (w1 * sim.ticks_no_overcrowd) - (w2 * sim.queue_sum) - (w3 * sim.fragile_penalty) - (w4 * cost)
+    total_physical_length = 0.0
+    excess_stations_count = 0
+    station_map = {s['id']: s for s in stations_data}
+    
+    for i in range(len(chromosome.lines)):
+        line_path = chromosome.lines[i]
+        n_stations = len(line_path)
+        if n_stations >= 2:
+            # Calcula distância física
+            for j in range(n_stations - 1):
+                s1, s2 = station_map[line_path[j]], station_map[line_path[j+1]]
+                total_physical_length += math.hypot(s2['x'] - s1['x'], s2['y'] - s1['y'])
+            
+            if chromosome.is_loop[i]:
+                s1, s2 = station_map[line_path[-1]], station_map[line_path[0]]
+                total_physical_length += math.hypot(s2['x'] - s1['x'], s2['y'] - s1['y'])
+                
+            # Verifica limite de estações ideal
+            if n_stations > 6:
+                excess_stations_count += (n_stations - 6)
+    
+    fitness = (w1 * sim.ticks_no_overcrowd) - (w2 * sim.queue_sum) - (w3 * sim.fragile_penalty) - (w4 * cost) - (w5 * empty_lines) - (w_length * total_physical_length) - (w_excess_stations * excess_stations_count)
     return fitness

@@ -27,6 +27,7 @@ class UI:
         self.pause_btn_rect = pygame.Rect(self.width - 100, 10, 40, 40)
         self.speed_btn_rect = pygame.Rect(self.width - 50, 10, 40, 40)
         self.ga_btn_rect = pygame.Rect(self.width - 150, 10, 40, 40)
+        self.spawn_btn_rect = pygame.Rect(self.width - 200, 10, 40, 40)
         self.line_selector_rects = []
         self.line_delete_rects = []
         self.city_btn_rects = {}
@@ -48,6 +49,7 @@ class UI:
         self.pause_btn_rect = pygame.Rect(self.width - 100, 10, 40, 40)
         self.speed_btn_rect = pygame.Rect(self.width - 50, 10, 40, 40)
         self.ga_btn_rect = pygame.Rect(self.width - 150, 10, 40, 40)
+        self.spawn_btn_rect = pygame.Rect(self.width - 200, 10, 40, 40)
     
     def draw(self):
         """Draw all UI elements"""
@@ -295,6 +297,17 @@ class UI:
         
         lbl_ga = self.small_font.render("AI", True, fg3)
         self.screen.blit(lbl_ga, lbl_ga.get_rect(center=(cx3, cy3)))
+
+        # --- Spawn limit button ---
+        cx4, cy4 = getattr(self, 'spawn_btn_rect', pygame.Rect(self.width - 200, 10, 40, 40)).center
+        spawn_enabled = game_state.spawn_stations_enabled
+        bg4 = (76, 175, 80) if spawn_enabled else (231, 76, 60) # green or red
+        fg4 = (255, 255, 255)
+        pygame.draw.circle(self.screen, bg4, (cx4, cy4), 20)
+        pygame.draw.circle(self.screen, (51, 51, 51), (cx4, cy4), 20, 2)
+        
+        lbl_sp = self.small_font.render("SP", True, fg4)
+        self.screen.blit(lbl_sp, lbl_sp.get_rect(center=(cx4, cy4)))
     
     def draw_line_selector(self):
         """Draw line selection buttons at bottom"""
@@ -521,6 +534,10 @@ class UI:
 
         if getattr(self, 'ga_btn_rect', None) and self.ga_btn_rect.collidepoint(pos):
             return 'start_ga'
+
+        if getattr(self, 'spawn_btn_rect', None) and self.spawn_btn_rect.collidepoint(pos):
+            game_state.spawn_stations_enabled = not game_state.spawn_stations_enabled
+            return True
 
         # Line delete buttons
         for rect, line_index in self.line_delete_rects:

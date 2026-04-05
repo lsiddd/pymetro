@@ -159,11 +159,12 @@ class MiniMetroGame:
             line.marked_for_deletion = False
 
         # Apply new ones
+        station_map = {s.id: s for s in game_state.stations}
         for i, line_stations in enumerate(chromosome.lines):
             line = game_state.lines[i]
             # Must populate actual station instances since chromosome may have only id's in the future
             if line_stations:
-                line.stations = line_stations[:]
+                line.stations = [station_map[sid] for sid in line_stations]
                 line.active = len(line.stations) >= 2
                 
             game_state.available_trains = 0 
