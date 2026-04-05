@@ -11,10 +11,14 @@ class InputHandler:
         self.dragged_segment = None
         self.current_path = []
         
-        # Resource dragging
+        # Resource dragging (from inventory panel)
         self.dragged_train_resource = False
         self.dragged_carriage = False
-        
+        self.dragged_interchange = False
+
+        # Train reallocation drag
+        self.dragged_existing_train = None
+
         # Hover state
         self.hovered_station = None
         self.hovered_train = None
@@ -104,9 +108,15 @@ class InputHandler:
         
         if button == 1:  # Left click
             print(f"InputHandler: Mouse down at {pos}")
-            
+
+            # Check if clicking on an existing train (for line reallocation)
+            train = self._get_train_at_pos(pos)
+            if train:
+                self.dragged_existing_train = train
+                return True
+
             line = game_state.lines[game_state.selected_line]
-            
+
             # Check if clicking on a station
             station = self._get_station_at_pos(pos)
             if station:
@@ -186,9 +196,59 @@ class InputHandler:
         
         if button != 1:
             return False
-        
+
         print(f"InputHandler: Mouse up at {pos}")
-        
+
+        # --- Resource drag drops ---
+
+        # Drop locomotive on a line to add a second (or further) train
+        if self.dragged_train_resource:
+            target_line = self._get_line_at_pos(pos)
+            if target_line and target_line.active and len(target_line.trains) < CONFIG.MAX_TRAINS_PER_LINE:
+                from components.train import Train
+                game_state.available_trains -= 1
+                new_train = Train(target_line)
+                game_state.trains.append(new_train)
+                target_line.trains.append(new_train)
+                print(f"InputHandler: Added train to line {target_line.index}")
+            self._reset_input_state()
+            return True
+
+        # Drop carriage on a train to attach it (or reallocate from another)
+        if self.dragged_carriage:
+            target_train = self._get_train_at_pos(pos)
+            if target_train and not target_train.has_carriage:
+                target_train.has_carriage = True
+                game_state.carriages -= 1
+                print(f"InputHandler: Attached carriage to train {target_train.id}")
+            self._reset_input_state()
+            return True
+
+        # Drop interchange on a station
+        if self.dragged_interchange:
+            target_station_ic = self._get_station_at_pos(pos)
+            if target_station_ic and not target_station_ic.is_interchange:
+                target_station_ic.is_interchange = True
+                game_state.interchanges -= 1
+                target_station_ic.animate_upgrade = {'start_time': __import__('time').time() * 1000, 'duration': 500}
+                print(f"InputHandler: Applied interchange to station {target_station_ic.id}")
+            self._reset_input_state()
+            return True
+
+        # Reallocate existing train to a different line
+        if self.dragged_existing_train:
+            target_line = self._get_line_at_pos(pos)
+            src_line = self.dragged_existing_train.line
+            if (target_line and target_line.active
+                    and target_line != src_line
+                    and len(target_line.trains) < CONFIG.MAX_TRAINS_PER_LINE):
+                self.dragged_existing_train.reassign_to_line(target_line)
+                print(f"InputHandler: Reallocated train {self.dragged_existing_train.id} to line {target_line.index}")
+            self._reset_input_state()
+            return True
+
+        # --- Regular line drawing / editing below ---
+
         line = game_state.lines[game_state.selected_line]
         target_station = self._get_station_at_pos(pos)
         
@@ -317,21 +377,77 @@ class InputHandler:
         self.dragged_segment = None
         self.current_path = []
         self.preview_line = None
-        
+        self.dragged_train_resource = False
+        self.dragged_carriage = False
+        self.dragged_interchange = False
+        self.dragged_existing_train = None
+
         print("InputHandler: Reset input state")
     
     def _get_station_at_pos(self, pos):
         """Get station at position"""
         from state import game_state
-        
+
         for station in game_state.stations:
             distance = math.sqrt((pos[0] - station.x)**2 + (pos[1] - station.y)**2)
             if distance <= CONFIG.STATION_RADIUS + 15:
                 return station
         return None
+
+    def _get_train_at_pos(self, pos):
+        """Get train at position (for drag reallocation)"""
+        from state import game_state
+
+        for train in game_state.trains:
+            if math.hypot(pos[0] - train.x, pos[1] - train.y) <= 15:
+                return train
+        return None
+
+    def _get_line_at_pos(self, pos):
+        """Get line whose segment is closest to pos (within 20px)"""
+        from state import game_state
+
+        class _Pt:
+            def __init__(self, x, y):
+                self.x = x
+                self.y = y
+
+        pt = _Pt(pos[0], pos[1])
+        for line in game_state.lines:
+            if not line.active:
+                continue
+            for i in range(len(line.stations) - 1):
+                s1 = line.stations[i]
+                s2 = line.stations[i + 1]
+                if line._distance_to_line_segment(pt, s1, s2) < 20:
+                    return line
+        return None
     
     def draw_preview(self, screen):
-        """Draw line preview with smooth animation"""
+        """Draw line preview with smooth animation, or drag ghost for resources."""
+        # Draw resource drag ghost
+        drag_icon = None
+        if self.dragged_train_resource:
+            drag_icon = '🚂'
+        elif self.dragged_carriage:
+            drag_icon = '🚃'
+        elif self.dragged_interchange:
+            drag_icon = '⭕'
+        elif self.dragged_existing_train:
+            drag_icon = '🚂'
+
+        if drag_icon:
+            # Lazy-init a small font for the ghost; reuse pygame default to avoid loading files
+            font = pygame.font.Font(None, 32)
+            surf = font.render(drag_icon, True, (51, 51, 51))
+            ghost = pygame.Surface(surf.get_size(), pygame.SRCALPHA)
+            ghost.fill((0, 0, 0, 0))
+            ghost.blit(surf, (0, 0))
+            ghost.set_alpha(180)
+            mx, my = self.mouse_pos
+            screen.blit(ghost, (mx - surf.get_width() // 2, my - surf.get_height() // 2))
+            return
+
         if not self.preview_line:
             return
         

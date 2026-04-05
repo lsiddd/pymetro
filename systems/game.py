@@ -21,12 +21,11 @@ class Game:
         """Initialize new game"""
         from state import game_state
         
+        selected_city = game_state.selected_city  # Preserve city selection across reset
         game_state.reset()
-        
-        # --- CHANGE START ---
-        # Set difficulty for this episode
+        game_state.set_city(selected_city)
+
         game_state.difficulty_stage = difficulty_stage
-        # --- CHANGE END ---
 
         # Create lines
         game_state.lines = []
@@ -49,7 +48,7 @@ class Game:
         game_state.rivers = []
         
         if game_state.selected_city == 'london':
-            # Thames-like river
+            # Thames
             points = [
                 {'x': 0, 'y': height * 0.65},
                 {'x': width * 0.3, 'y': height * 0.55},
@@ -61,6 +60,52 @@ class Game:
                 {'x': 0, 'y': height * 0.75}
             ]
             game_state.rivers.append(River(points))
+
+        elif game_state.selected_city == 'paris':
+            # Seine — diagonal band crossing centre
+            points = [
+                {'x': 0,           'y': height * 0.44},
+                {'x': width * 0.25,'y': height * 0.41},
+                {'x': width * 0.50,'y': height * 0.49},
+                {'x': width * 0.75,'y': height * 0.46},
+                {'x': width,       'y': height * 0.53},
+                {'x': width,       'y': height * 0.62},
+                {'x': width * 0.75,'y': height * 0.56},
+                {'x': width * 0.50,'y': height * 0.59},
+                {'x': width * 0.25,'y': height * 0.51},
+                {'x': 0,           'y': height * 0.54},
+            ]
+            game_state.rivers.append(River(points))
+
+        elif game_state.selected_city == 'newyork':
+            # Hudson River (left strip)
+            hudson = [
+                {'x': width * 0.10, 'y': 0},
+                {'x': width * 0.17, 'y': 0},
+                {'x': width * 0.20, 'y': height * 0.35},
+                {'x': width * 0.17, 'y': height},
+                {'x': width * 0.10, 'y': height},
+            ]
+            game_state.rivers.append(River(hudson))
+            # East River (right strip)
+            east = [
+                {'x': width * 0.55, 'y': 0},
+                {'x': width * 0.62, 'y': 0},
+                {'x': width * 0.64, 'y': height * 0.45},
+                {'x': width * 0.60, 'y': height},
+                {'x': width * 0.53, 'y': height},
+            ]
+            game_state.rivers.append(River(east))
+
+        elif game_state.selected_city == 'tokyo':
+            # Tokyo Bay — bottom-right wedge
+            bay = [
+                {'x': width * 0.58, 'y': height * 0.62},
+                {'x': width,        'y': height * 0.52},
+                {'x': width,        'y': height},
+                {'x': width * 0.48, 'y': height},
+            ]
+            game_state.rivers.append(River(bay))
     
     def create_initial_stations(self, width, height):
         """Create initial stations"""
@@ -115,6 +160,7 @@ class Game:
         if elapsed > CONFIG.WEEK_DURATION:
             game_state.week += 1
             game_state.week_start_time = current_time
+            game_state.available_trains += 1  # Always receive 1 locomotive per week
             return 'show_upgrades'
         
         # --- CHANGE START ---

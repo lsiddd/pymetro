@@ -52,16 +52,20 @@ class MiniMetroGame:
             
             elif event.type == pygame.MOUSEBUTTONDOWN:
                 print(f"MiniMetro: Mouse button {event.button} down at {event.pos}")
-                # First check UI clicks
                 ui_result = self.ui.handle_click(event.pos)
                 if ui_result == 'start_game':
                     self.start_game()
                 elif ui_result == 'restart_game':
                     self.restart_game()
+                elif ui_result == 'drag_train':
+                    self.input_handler.dragged_train_resource = True
+                elif ui_result == 'drag_carriage':
+                    self.input_handler.dragged_carriage = True
+                elif ui_result == 'drag_interchange':
+                    self.input_handler.dragged_interchange = True
                 elif ui_result:
                     print(f"MiniMetro: UI handled click: {ui_result}")
                 else:
-                    # Handle game world clicks
                     if self.game.initialized and not self.ui.show_start_screen:
                         self.input_handler.handle_mouse_down(event.pos, event.button)
             
