@@ -7,6 +7,7 @@ from state import game_state
 from systems.game import Game
 from systems.ui import UI
 from systems.input import InputHandler
+from systems.ai.ga import GeneticAlgorithmTask
 
 class MiniMetroGame:
     def __init__(self):
@@ -27,6 +28,9 @@ class MiniMetroGame:
         self.clock = pygame.time.Clock()
         self.running = True
         self.last_time = time.time()
+        
+        # AG Thread integration
+        self.ga_thread = None
     
     def handle_events(self):
         """Handle pygame events"""
@@ -52,18 +56,20 @@ class MiniMetroGame:
                     self.input_handler.dragged_carriage = True
                 elif ui_result == 'drag_interchange':
                     self.input_handler.dragged_interchange = True
+                elif ui_result == 'start_ga':
+                    self.start_ga_optimization()
                 elif not ui_result:
-                    if self.game.initialized and not self.ui.show_start_screen:
+                    if self.game.initialized and not self.ui.show_start_screen and not self.ga_thread:
                         world_pos = self._to_world_pos(event.pos)
                         self.input_handler.handle_mouse_down(world_pos, event.button)
 
             elif event.type == pygame.MOUSEBUTTONUP:
-                if self.game.initialized and not self.ui.show_start_screen:
+                if self.game.initialized and not self.ui.show_start_screen and not self.ga_thread:
                     world_pos = self._to_world_pos(event.pos)
                     self.input_handler.handle_mouse_up(world_pos, event.button)
 
             elif event.type == pygame.MOUSEMOTION:
-                if self.game.initialized and not self.ui.show_start_screen:
+                if self.game.initialized and not self.ui.show_start_screen and not self.ga_thread:
                     world_pos = self._to_world_pos(event.pos)
                     self.input_handler.handle_mouse_motion(world_pos)
 
@@ -94,9 +100,23 @@ class MiniMetroGame:
 
     def restart_game(self):
         """Restart the game"""
+        if self.ga_thread:
+            self.ga_thread.is_running = False
+            self.ga_thread = None
         self.ui.show_start_screen = True
         self.ui.show_game_over_modal = False
         game_state.reset()
+        
+    def start_ga_optimization(self):
+        """Start GA algorithm thread"""
+        if self.ga_thread is not None and self.ga_thread.is_alive(): return
+        game_state.paused = True
+        self.ga_thread = GeneticAlgorithmTask(game_state, self._on_ga_complete)
+        self.ga_thread.start()
+        
+    def _on_ga_complete(self, chromosome):
+        """Callback to set up the best chromosome locally. Will be polled in update loop"""
+        self._best_chromosome_ready = chromosome
     
     def update(self, delta_time):
         """Update game logic"""
@@ -105,8 +125,15 @@ class MiniMetroGame:
         mouse_pressed = pygame.mouse.get_pressed()[0]
         self.input_handler.update(mouse_pos, mouse_pressed)
         
+        # Apply chromosome if GA just finished
+        if getattr(self, '_best_chromosome_ready', None):
+            self._apply_ga_chromosome(self._best_chromosome_ready)
+            self._best_chromosome_ready = None
+            self.ga_thread = None
+            game_state.paused = False
+        
         # Update game
-        if self.game.initialized and not self.ui.show_start_screen:
+        if self.game.initialized and not self.ui.show_start_screen and not self.ga_thread:
             result = self.game.update(delta_time, self.screen_width, self.screen_height)
             
             if result == 'show_upgrades':
@@ -114,6 +141,53 @@ class MiniMetroGame:
                 game_state.paused = True
             elif result == 'game_over':
                 self.ui.show_game_over()
+                
+    def _apply_ga_chromosome(self, chromosome):
+        from components.train import Train
+        from systems.pathfinding import mark_graph_dirty
+        
+        # Clear existing lines and trains
+        for line in game_state.lines:
+            for train in list(line.trains):
+                if train in game_state.trains: game_state.trains.remove(train)
+                # drop passengers back to starting stations
+                for passg in train.passengers:
+                    if passg in game_state.passengers: game_state.passengers.remove(passg)
+            line.trains.clear()
+            line.stations.clear()
+            line.active = False
+            line.marked_for_deletion = False
+
+        # Apply new ones
+        for i, line_stations in enumerate(chromosome.lines):
+            line = game_state.lines[i]
+            # Must populate actual station instances since chromosome may have only id's in the future
+            if line_stations:
+                line.stations = line_stations[:]
+                line.active = len(line.stations) >= 2
+                
+            game_state.available_trains = 0 
+            game_state.carriages = 0 
+        
+        num_trains_total = sum(chromosome.trains_per_line)
+        num_car_total = sum(chromosome.carriages_per_line)
+        game_state.available_trains += max(0, 3 - num_trains_total) # dummy logic for leftover
+        
+        for i, line in enumerate(game_state.lines):
+            if not line.active: continue
+            train_count = chromosome.trains_per_line[i]
+            car_count = chromosome.carriages_per_line[i]
+            
+            for t_idx in range(train_count):
+                train_carriages = car_count // train_count
+                if t_idx < car_count % train_count: train_carriages += 1
+                
+                t = Train(line)
+                t.carriage_count = train_carriages
+                game_state.trains.append(t)
+                line.trains.append(t)
+                
+        mark_graph_dirty()
     
     def render(self):
         """Render the game"""
@@ -137,6 +211,17 @@ class MiniMetroGame:
 
         # Render UI on top
         self.ui.draw()
+        
+        # Render GA overlay
+        if self.ga_thread and self.ga_thread.is_alive():
+            overlay = pygame.Surface((self.screen_width, self.screen_height), pygame.SRCALPHA)
+            overlay.fill((0, 0, 0, 150))
+            self.screen.blit(overlay, (0, 0))
+            
+            font = pygame.font.Font(None, 48)
+            txt = font.render(f"Configurando Topologia... {int(self.ga_thread.progress * 100)}%", True, (255,255,255))
+            trank = txt.get_rect(center=(self.screen_width//2, self.screen_height//2))
+            self.screen.blit(txt, trank)
 
         # Update display
         pygame.display.flip()

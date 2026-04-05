@@ -24,9 +24,9 @@ class UI:
         self.show_game_over_modal = False
         self.show_start_screen = True
         
-        # Button rects
         self.pause_btn_rect = pygame.Rect(self.width - 100, 10, 40, 40)
         self.speed_btn_rect = pygame.Rect(self.width - 50, 10, 40, 40)
+        self.ga_btn_rect = pygame.Rect(self.width - 150, 10, 40, 40)
         self.line_selector_rects = []
         self.line_delete_rects = []
         self.city_btn_rects = {}
@@ -47,6 +47,7 @@ class UI:
         # Update button positions
         self.pause_btn_rect = pygame.Rect(self.width - 100, 10, 40, 40)
         self.speed_btn_rect = pygame.Rect(self.width - 50, 10, 40, 40)
+        self.ga_btn_rect = pygame.Rect(self.width - 150, 10, 40, 40)
     
     def draw(self):
         """Draw all UI elements"""
@@ -284,6 +285,16 @@ class UI:
             # Two small triangles pointing right (fast-forward)
             pygame.draw.polygon(self.screen, fg2, [(cx2 - 9, cy2 - 7), (cx2 - 9, cy2 + 7), (cx2,   cy2)])
             pygame.draw.polygon(self.screen, fg2, [(cx2,     cy2 - 7), (cx2,     cy2 + 7), (cx2 + 9, cy2)])
+
+        # --- GA button ---
+        cx3, cy3 = self.ga_btn_rect.center
+        bg3 = (51, 102, 255)  # blue
+        fg3 = (255, 255, 255)
+        pygame.draw.circle(self.screen, bg3, (cx3, cy3), 20)
+        pygame.draw.circle(self.screen, (51, 51, 51), (cx3, cy3), 20, 2)
+        
+        lbl_ga = self.small_font.render("AI", True, fg3)
+        self.screen.blit(lbl_ga, lbl_ga.get_rect(center=(cx3, cy3)))
     
     def draw_line_selector(self):
         """Draw line selection buttons at bottom"""
@@ -507,6 +518,9 @@ class UI:
         if self.speed_btn_rect.collidepoint(pos):
             game_state.speed = 2.5 if game_state.speed == 1 else 1
             return True
+
+        if getattr(self, 'ga_btn_rect', None) and self.ga_btn_rect.collidepoint(pos):
+            return 'start_ga'
 
         # Line delete buttons
         for rect, line_index in self.line_delete_rects:
