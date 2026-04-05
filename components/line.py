@@ -276,7 +276,14 @@ class Line:
     _FILLET_R: float = 14.0
 
     def draw(self, screen: pygame.Surface) -> None:
-        """Draw the line using 45°/90°-routed segments with smooth Bézier corners."""
+        """Draw the line using 45°/90°-routed segments with smooth Bézier corners.
+
+        When multiple lines share the same station-pair segment they are drawn as
+        true parallel paths: the base waypoints are computed once from the raw
+        station coordinates, then each line's copy is offset via _offset_path()
+        which moves the elbow to the geometric intersection of the two offset
+        sub-segments, guaranteeing constant spacing along every sub-segment.
+        """
         if (len(self.stations) < 2 and not self.marked_for_deletion) or not self.active:
             return
 
@@ -286,43 +293,32 @@ class Line:
             s1 = self.stations[i]
             s2 = self.stations[i + 1]
 
-            # Perpendicular offset when multiple lines share the same segment
-            shared_lines = [
-                line for line in game_state.lines
-                if line.active
-                and s1 in line.stations and s2 in line.stations
-                and abs(line.stations.index(s1) - line.stations.index(s2)) == 1
-            ]
-            line_idx = next((j for j, l in enumerate(shared_lines) if l.index == self.index), 0)
-            offset = (line_idx - (len(shared_lines) - 1) / 2) * (CONFIG.LINE_WIDTH + 2)
+            # Collect lines that contain s1↔s2 as consecutive stations, sorted for
+            # a stable rank so every frame the same line gets the same offset.
+            shared = sorted(
+                [l for l in game_state.lines if l.active and l._has_segment(s1, s2)],
+                key=lambda l: l.index,
+            )
+            n = len(shared)
+            my_rank = next((j for j, l in enumerate(shared) if l.index == self.index), 0)
+            # Centre the bundle around the station axis
+            offset = (my_rank - (n - 1) / 2.0) * (CONFIG.LINE_WIDTH + 3)
 
-            dx = s2.x - s1.x
-            dy = s2.y - s1.y
-            length = math.sqrt(dx * dx + dy * dy)
-            if length == 0:
-                continue
+            # Compute the canonical (zero-offset) waypoints from station positions
+            base = self._compute_metro_waypoints((s1.x, s1.y), (s2.x, s2.y))
 
-            nx = -dy / length
-            ny = dx / length
-
-            # Apply perpendicular offset to both endpoints
-            p1 = (s1.x + offset * nx, s1.y + offset * ny)
-            p2 = (s2.x + offset * nx, s2.y + offset * ny)
+            # Offset every point in the path, preserving true parallelism
+            pts = self._offset_path(base, offset) if abs(offset) > 0.01 else list(base)
 
             line_color = self.color
             if self.marked_for_deletion:
-                line_color = (
-                    int(self.color[0] * 0.5 + 128 * 0.5),
-                    int(self.color[1] * 0.5 + 128 * 0.5),
-                    int(self.color[2] * 0.5 + 128 * 0.5),
-                )
+                line_color = tuple(int(c * 0.5 + 128 * 0.5) for c in self.color)  # type: ignore[assignment]
 
             crosses_river = self.check_river_crossing(s1, s2)
             dashed = crosses_river or self.marked_for_deletion
             w = int(CONFIG.LINE_WIDTH * 0.8) if crosses_river else CONFIG.LINE_WIDTH
 
-            waypoints = self._compute_metro_waypoints(p1, p2)
-            self._draw_metro_path(screen, waypoints, line_color, w, dashed)
+            self._draw_metro_path(screen, pts, line_color, w, dashed)
     
     # ------------------------------------------------------------------
     # Metro-style 45°/90° routing helpers
@@ -423,6 +419,94 @@ class Line:
         if d < 1e-6:
             return (0.0, 0.0)
         return (dx / d, dy / d)
+
+    def _has_segment(self, s1: Any, s2: Any) -> bool:
+        """Return True if s1 and s2 appear as consecutive stations on this line."""
+        stations = self.stations
+        for i in range(len(stations) - 1):
+            if (stations[i] is s1 and stations[i + 1] is s2) or \
+               (stations[i] is s2 and stations[i + 1] is s1):
+                return True
+        return False
+
+    def _offset_path(
+        self,
+        pts: List[Tuple[float, float]],
+        offset: float,
+    ) -> List[Tuple[float, float]]:
+        """Offset a 2- or 3-point metro path by *offset* pixels, maintaining
+        true geometric parallelism.
+
+        For a 2-point (straight) path both endpoints are shifted by the same
+        perpendicular vector → trivially parallel.
+
+        For a 3-point path (diagonal + axis-aligned), the elbow of the offset
+        path is the intersection of:
+          • the line through (p0_offset) in direction d01
+          • the line through (p2_offset) in direction -d12
+        This guarantees that both sub-segments of the offset path are exactly
+        *offset* pixels away from the corresponding sub-segments of the original.
+        """
+        if len(pts) == 2:
+            p0, p2 = pts
+            n = self._perp_unit(p2[0] - p0[0], p2[1] - p0[1])
+            return [
+                (p0[0] + offset * n[0], p0[1] + offset * n[1]),
+                (p2[0] + offset * n[0], p2[1] + offset * n[1]),
+            ]
+
+        p0, p1, p2 = pts  # p1 is the elbow
+
+        d01 = self._unit_vec(p1[0] - p0[0], p1[1] - p0[1])
+        d12 = self._unit_vec(p2[0] - p1[0], p2[1] - p1[1])
+
+        # CCW perpendicular of each sub-segment
+        n01 = (-d01[1], d01[0])
+        n12 = (-d12[1], d12[0])
+
+        # Offset the two endpoints
+        p0_off = (p0[0] + offset * n01[0], p0[1] + offset * n01[1])
+        p2_off = (p2[0] + offset * n12[0], p2[1] + offset * n12[1])
+
+        # The offset elbow is the intersection of:
+        #   line through p0_off in direction d01
+        #   line through p2_off in direction d12 (approaching from p2 side)
+        # We parameterise both lines from p1 shifted to the two normals:
+        a = (p1[0] + offset * n01[0], p1[1] + offset * n01[1])
+        b = (p1[0] + offset * n12[0], p1[1] + offset * n12[1])
+
+        p1_off = self._line_intersect_2d(
+            a[0], a[1], d01[0], d01[1],
+            b[0], b[1], d12[0], d12[1],
+        )
+        if p1_off is None:
+            # Parallel directions (degenerate corner) – average as fallback
+            p1_off = ((a[0] + b[0]) / 2.0, (a[1] + b[1]) / 2.0)
+
+        return [p0_off, p1_off, p2_off]
+
+    @staticmethod
+    def _perp_unit(dx: float, dy: float) -> Tuple[float, float]:
+        """CCW perpendicular unit vector."""
+        d = math.sqrt(dx * dx + dy * dy)
+        if d < 1e-6:
+            return (0.0, -1.0)
+        return (-dy / d, dx / d)
+
+    @staticmethod
+    def _line_intersect_2d(
+        px1: float, py1: float, dx1: float, dy1: float,
+        px2: float, py2: float, dx2: float, dy2: float,
+    ) -> Optional[Tuple[float, float]]:
+        """Intersection of two infinite lines given as point + direction.
+
+        Returns None when lines are parallel (denom ≈ 0).
+        """
+        denom = dx1 * dy2 - dy1 * dx2
+        if abs(denom) < 1e-9:
+            return None
+        t = ((px2 - px1) * dy2 - (py2 - py1) * dx2) / denom
+        return (px1 + t * dx1, py1 + t * dy1)
 
     def _draw_dashed_line(self, screen: pygame.Surface, x1: float, y1: float, x2: float, y2: float, color: Tuple[int, int, int], width: int) -> None:
         """Draw a dashed line"""
