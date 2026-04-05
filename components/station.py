@@ -49,10 +49,12 @@ class Station:
             progress = elapsed / CONFIG.OVERCROWD_TIME
             
             # Pulsing glow effect
-            pulse = 10 + math.sin(time.time() * 1000 / 150) * 5
-            glow_surface = pygame.Surface((50, 50), pygame.SRCALPHA)
-            pygame.draw.circle(glow_surface, (211, 47, 47, 50), (25, 25), CONFIG.STATION_RADIUS + 8)
-            screen.blit(glow_surface, (self.x - 25, self.y - 25))
+            pulse = int(CONFIG.STATION_RADIUS + 8 + math.sin(time.time() * 1000 / 150) * 5)
+            glow_size = pulse * 2 + 4
+            glow_surface = pygame.Surface((glow_size, glow_size), pygame.SRCALPHA)
+            cx = glow_size // 2
+            pygame.draw.circle(glow_surface, (211, 47, 47, 50), (cx, cx), pulse)
+            screen.blit(glow_surface, (int(self.x) - cx, int(self.y) - cx))
             
             # Timer arc
             if progress < 1:

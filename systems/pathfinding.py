@@ -176,9 +176,24 @@ def build_station_graph_with_lines():
     return _graph_manager.get_graph()
 
 def mark_graph_dirty():
-    """Mark the cached graph as dirty and immediately recalculate waiting passengers."""
+    """Mark the cached graph as dirty, recalculate passenger routes and train waypoints."""
     _graph_manager.mark_dirty()
     _recalculate_waiting_passengers()
+    _recompute_train_waypoints()
+
+
+def _recompute_train_waypoints():
+    """Recompute visual path waypoints for all active trains.
+
+    Called whenever line topology changes so that trains stay aligned with the
+    visual line rendering (which recomputes offsets for parallel segments each frame).
+    """
+    try:
+        from state import game_state
+        for train in game_state.trains:
+            train._compute_path_waypoints()
+    except Exception:
+        pass
 
 def _recalculate_waiting_passengers():
     """Recalculate routes for all passengers currently waiting at a station."""

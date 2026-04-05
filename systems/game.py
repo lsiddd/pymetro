@@ -295,17 +295,21 @@ class Game:
         return False
     
     def render(self, screen):
-        """Render the game world, applying camera zoom when > week 1."""
+        """Render the game world into an intermediate surface and return it.
+
+        The caller is responsible for compositing the surface onto the screen
+        (with zoom + centering) so that overlays drawn afterwards (e.g. input
+        preview) land on the world surface before the final scale, keeping them
+        correctly aligned with game objects at all zoom levels.
+        """
         from state import game_state
 
         if not self.initialized:
             screen.fill((244, 241, 233))
-            return
+            return None
 
         sw, sh = screen.get_width(), screen.get_height()
-        zoom = game_state.camera_zoom
 
-        # Render world to an intermediate surface
         world_surf = pygame.Surface((sw, sh))
         world_surf.fill((244, 241, 233))
 
@@ -318,11 +322,4 @@ class Game:
         for train in game_state.trains:
             train.draw(world_surf)
 
-        if zoom < 0.995:
-            # Scale the game world down and centre it; expose a neutral border
-            screen.fill((210, 212, 208))
-            zw, zh = int(sw * zoom), int(sh * zoom)
-            scaled = pygame.transform.smoothscale(world_surf, (zw, zh))
-            screen.blit(scaled, ((sw - zw) // 2, (sh - zh) // 2))
-        else:
-            screen.blit(world_surf, (0, 0))
+        return world_surf

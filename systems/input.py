@@ -30,7 +30,6 @@ class InputHandler:
         self.mouse_pos = (0, 0)
         self.mouse_pressed = False
         
-        print("InputHandler: Initialized with JS-style line drawing")
     
     def update(self, mouse_pos, mouse_pressed):
         """Update input state - called every frame"""
@@ -107,8 +106,6 @@ class InputHandler:
             return False
         
         if button == 1:  # Left click
-            print(f"InputHandler: Mouse down at {pos}")
-
             # Check if clicking on an existing train (for line reallocation)
             train = self._get_train_at_pos(pos)
             if train:
@@ -120,25 +117,21 @@ class InputHandler:
             # Check if clicking on a station
             station = self._get_station_at_pos(pos)
             if station:
-                print(f"InputHandler: Clicked on station at ({station.x}, {station.y})")
-                
                 # Handle shift+click for removal
                 keys = pygame.key.get_pressed()
                 if keys[pygame.K_LSHIFT] or keys[pygame.K_RSHIFT]:
                     if station in line.stations:
-                        print(f"InputHandler: Removing station from line {game_state.selected_line}")
                         line.remove_station(station)
                         return True
-                
+
                 # Check if this is a loop closure attempt
                 is_already_loop = len(line.stations) > 2 and line.stations[0] == line.stations[-1]
                 if is_already_loop and station in line.stations:
-                    print("InputHandler: Ignoring click on station in completed loop")
                     return False
-                
+
                 # Start line drawing
                 self.is_drawing_line = True
-                
+
                 if station in line.stations:
                     # Clicking on existing station - check if it's an endpoint
                     station_index = None
@@ -146,24 +139,21 @@ class InputHandler:
                         station_index = line.stations.index(station)
                     except ValueError:
                         pass
-                    
+
                     if station_index == 0 or station_index == len(line.stations) - 1:
                         # Endpoint - start removal mode initially
                         self.current_path = [station]
                         self.is_removing_segment = True
-                        print(f"InputHandler: Started removal mode from endpoint")
                     else:
                         # Middle station - can't extend from here
                         self.is_drawing_line = False
-                        print(f"InputHandler: Can't extend from middle station")
                 else:
                     # New station
                     self.current_path = [station]
                     self.is_removing_segment = False
-                    print(f"InputHandler: Started line drawing from new station")
-                
+
                 return True
-            
+
             # Check if clicking on a line segment for insertion
             for line_obj in game_state.lines:
                 if not line_obj.active:
@@ -174,13 +164,11 @@ class InputHandler:
                     if line_obj._distance_to_line_segment(type('pos', (), {'x': pos[0], 'y': pos[1]}), s1, s2) < 20:
                         self.dragged_segment = {'line': line_obj, 'index': i}
                         self.is_drawing_line = False
-                        print(f"InputHandler: Started segment dragging on line {line_obj.index}")
                         return True
-        
+
         elif button == 3:  # Right click - remove station from lines
             station = self._get_station_at_pos(pos)
             if station:
-                print(f"InputHandler: Right-click removal of station")
                 for line in game_state.lines:
                     if station in line.stations:
                         line.remove_station(station)
@@ -197,8 +185,6 @@ class InputHandler:
         if button != 1:
             return False
 
-        print(f"InputHandler: Mouse up at {pos}")
-
         # --- Resource drag drops ---
 
         # Drop locomotive on a line to add a second (or further) train
@@ -210,7 +196,6 @@ class InputHandler:
                 new_train = Train(target_line)
                 game_state.trains.append(new_train)
                 target_line.trains.append(new_train)
-                print(f"InputHandler: Added train to line {target_line.index}")
             self._reset_input_state()
             return True
 
@@ -220,7 +205,6 @@ class InputHandler:
             if target_train and target_train.carriage_count < CONFIG.MAX_CARRIAGES_PER_TRAIN:
                 target_train.carriage_count += 1
                 game_state.carriages -= 1
-                print(f"InputHandler: Attached carriage to train {target_train.id} ({target_train.carriage_count} total)")
             self._reset_input_state()
             return True
 
@@ -231,7 +215,6 @@ class InputHandler:
                 target_station_ic.is_interchange = True
                 game_state.interchanges -= 1
                 target_station_ic.animate_upgrade = {'start_time': __import__('time').time() * 1000, 'duration': 500}
-                print(f"InputHandler: Applied interchange to station {target_station_ic.id}")
             self._reset_input_state()
             return True
 
@@ -243,7 +226,6 @@ class InputHandler:
                     and target_line != src_line
                     and len(target_line.trains) < CONFIG.MAX_TRAINS_PER_LINE):
                 self.dragged_existing_train.reassign_to_line(target_line)
-                print(f"InputHandler: Reallocated train {self.dragged_existing_train.id} to line {target_line.index}")
             self._reset_input_state()
             return True
 
@@ -255,11 +237,9 @@ class InputHandler:
         # Handle segment removal
         if self.is_removing_segment and len(self.current_path) > 0:
             start_station = self.current_path[0]
-            
+
             # If we didn't drag to a new station, it's a removal action
             if not target_station or target_station == start_station:
-                print(f"InputHandler: Finalizing station removal")
-                
                 # Find neighbor for bridge refund
                 if line.stations:
                     s1 = line.stations[0] if len(line.stations) > 0 else None
@@ -269,98 +249,75 @@ class InputHandler:
                         neighbor = line.stations[-2] if start_station == line.stations[-1] else None
                     else:
                         neighbor = None
-                    
-                    # Check for bridge refund
+
                     if neighbor and line.check_river_crossing(start_station, neighbor):
                         game_state.bridges += 1
-                        print(f"InputHandler: Refunded bridge, now have {game_state.bridges}")
-                
+
                 line.remove_end_station(start_station)
-        
+
         # Handle segment insertion
         elif self.dragged_segment and target_station:
             segment = self.dragged_segment
             line_obj = segment['line']
             index = segment['index']
-            
+
             if target_station not in line_obj.stations:
-                print(f"InputHandler: Inserting station into line segment")
-                
                 s1 = line_obj.stations[index]
                 s2 = line_obj.stations[index + 1]
-                
-                # Calculate bridge costs
+
                 needs_bridge1 = line_obj.check_river_crossing(s1, target_station)
                 needs_bridge2 = line_obj.check_river_crossing(target_station, s2)
                 had_bridge = line_obj.check_river_crossing(s1, s2)
                 bridge_cost = (1 if needs_bridge1 else 0) + (1 if needs_bridge2 else 0) - (1 if had_bridge else 0)
-                
+
                 if game_state.bridges >= bridge_cost:
                     game_state.bridges -= bridge_cost
                     line_obj.add_station(target_station, index + 1)
-                    print(f"InputHandler: Successfully inserted station, bridges: {game_state.bridges}")
-                else:
-                    print(f"InputHandler: Not enough bridges for insertion (need {bridge_cost})")
-        
+
         # Handle line extension/creation
         elif self.is_drawing_line and len(self.current_path) > 0 and target_station:
             start_station = self.current_path[0]
-            
+
             if target_station != start_station:
-                print(f"InputHandler: Extending/creating line from {start_station} to {target_station}")
-                
                 stations_before = len(line.stations)
                 needs_bridge = line.check_river_crossing(start_station, target_station)
-                
-                if needs_bridge and game_state.bridges <= 0:
-                    print(f"InputHandler: Not enough bridges for connection")
-                else:
+
+                if not (needs_bridge and game_state.bridges <= 0):
                     success = False
-                    
+
                     # Case 1: Empty line
                     if len(line.stations) == 0:
-                        print(f"InputHandler: Creating new line")
                         line.add_station(start_station)
                         success = line.add_station(target_station)
-                    
+
                     # Case 2: Extend from start
-                    elif len(line.stations) > 0 and line.stations[0] == start_station:
-                        print(f"InputHandler: Extending from line start")
+                    elif line.stations[0] == start_station:
                         success = line.add_station(target_station, 0)
-                    
+
                     # Case 3: Extend from end
-                    elif len(line.stations) > 0 and line.stations[-1] == start_station:
-                        print(f"InputHandler: Extending from line end")
+                    elif line.stations[-1] == start_station:
                         success = line.add_station(target_station)
-                    
+
                     # Case 4: Connect to start
-                    elif len(line.stations) > 0 and line.stations[0] == target_station:
-                        print(f"InputHandler: Connecting to line start")
+                    elif line.stations[0] == target_station:
                         success = line.add_station(start_station, 0)
-                    
+
                     # Case 5: Connect to end
-                    elif len(line.stations) > 0 and line.stations[-1] == target_station:
-                        print(f"InputHandler: Connecting to line end")
+                    elif line.stations[-1] == target_station:
                         success = line.add_station(start_station)
-                    
+
                     if success:
-                        print(f"InputHandler: Line operation successful")
-                        
                         if needs_bridge:
                             game_state.bridges -= 1
-                            print(f"InputHandler: Used bridge, now have {game_state.bridges}")
-                        
+
                         # Add train if line was just created
                         if stations_before < 2 and len(line.stations) >= 2:
                             if game_state.available_trains > 0 and len(line.trains) == 0:
-                                print(f"InputHandler: Adding train to new line")
                                 game_state.available_trains -= 1
                                 new_train = Train(line)
                                 game_state.trains.append(new_train)
                                 line.trains.append(new_train)
-                    else:
-                        print(f"InputHandler: Line operation failed")
-        
+
         # Reset state
         self._reset_input_state()
         return True
@@ -381,8 +338,6 @@ class InputHandler:
         self.dragged_carriage = False
         self.dragged_interchange = False
         self.dragged_existing_train = None
-
-        print("InputHandler: Reset input state")
     
     def _get_station_at_pos(self, pos):
         """Get station at position"""

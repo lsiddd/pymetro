@@ -18,40 +18,30 @@ class MiniMetroGame:
         self.screen_height = 800
         self.screen = pygame.display.set_mode((self.screen_width, self.screen_height), pygame.RESIZABLE)
         pygame.display.set_caption("Mini Metro - Python Edition")
-        
+
         # Initialize systems
         self.game = Game()
         self.ui = UI(self.screen)
         self.input_handler = InputHandler()
-        
+
         # Game loop variables
         self.clock = pygame.time.Clock()
         self.running = True
         self.last_time = time.time()
-        
-        print("Mini Metro - Python Edition initialized!")
-        print("Controls:")
-        print("- Left click: Add stations to lines, select UI elements")
-        print("- Right click: Remove stations from lines")
-        print("- Mouse hover: Preview line connections")
-        print("- Drag resources to lines/stations (trains, carriages, interchanges)")
     
     def handle_events(self):
         """Handle pygame events"""
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 self.running = False
-                print("MiniMetro: Quit event received")
-            
+
             elif event.type == pygame.VIDEORESIZE:
                 self.screen_width = event.w
                 self.screen_height = event.h
                 self.screen = pygame.display.set_mode((self.screen_width, self.screen_height), pygame.RESIZABLE)
                 self.ui.update_screen_size(self.screen)
-                print(f"MiniMetro: Window resized to {self.screen_width}x{self.screen_height}")
-            
+
             elif event.type == pygame.MOUSEBUTTONDOWN:
-                print(f"MiniMetro: Mouse button {event.button} down at {event.pos}")
                 ui_result = self.ui.handle_click(event.pos)
                 if ui_result == 'start_game':
                     self.start_game()
@@ -63,15 +53,12 @@ class MiniMetroGame:
                     self.input_handler.dragged_carriage = True
                 elif ui_result == 'drag_interchange':
                     self.input_handler.dragged_interchange = True
-                elif ui_result:
-                    print(f"MiniMetro: UI handled click: {ui_result}")
-                else:
+                elif not ui_result:
                     if self.game.initialized and not self.ui.show_start_screen:
                         world_pos = self._to_world_pos(event.pos)
                         self.input_handler.handle_mouse_down(world_pos, event.button)
 
             elif event.type == pygame.MOUSEBUTTONUP:
-                print(f"MiniMetro: Mouse button {event.button} up at {event.pos}")
                 if self.game.initialized and not self.ui.show_start_screen:
                     world_pos = self._to_world_pos(event.pos)
                     self.input_handler.handle_mouse_up(world_pos, event.button)
@@ -80,20 +67,16 @@ class MiniMetroGame:
                 if self.game.initialized and not self.ui.show_start_screen:
                     world_pos = self._to_world_pos(event.pos)
                     self.input_handler.handle_mouse_motion(world_pos)
-            
+
             elif event.type == pygame.KEYDOWN:
-                print(f"MiniMetro: Key pressed: {pygame.key.name(event.key)}")
                 if event.key == pygame.K_SPACE:
                     game_state.paused = not game_state.paused
-                    print(f"MiniMetro: Game {'paused' if game_state.paused else 'resumed'}")
                 elif event.key == pygame.K_ESCAPE:
                     self.running = False
                 elif pygame.K_1 <= event.key <= pygame.K_9:
-                    # Quick line selection
                     line_num = event.key - pygame.K_1
                     if line_num < game_state.available_lines:
                         game_state.selected_line = line_num
-                        print(f"MiniMetro: Selected line {line_num}")
     
     def _to_world_pos(self, screen_pos):
         """Convert screen position to game-world position accounting for camera zoom."""
@@ -109,14 +92,12 @@ class MiniMetroGame:
     def start_game(self):
         """Start a new game"""
         self.game.init_game(self.screen_width, self.screen_height)
-        print(f"Started new game in {game_state.selected_city.title()}")
-    
+
     def restart_game(self):
         """Restart the game"""
         self.ui.show_start_screen = True
         self.ui.show_game_over_modal = False
         game_state.reset()
-        print("Game restarted")
     
     def update(self, delta_time):
         """Update game logic"""
@@ -137,23 +118,32 @@ class MiniMetroGame:
     
     def render(self):
         """Render the game"""
-        # Render game world
         if self.game.initialized and not self.ui.show_start_screen:
-            self.game.render(self.screen)
-            
-            # Draw input preview
-            self.input_handler.draw_preview(self.screen)
-        
+            world_surf = self.game.render(self.screen)
+
+            if world_surf is not None:
+                # Draw input preview onto the world surface so it scales with
+                # the rest of the world (fixes misalignment at zoom < 1).
+                self.input_handler.draw_preview(world_surf)
+
+                zoom = game_state.camera_zoom
+                sw, sh = self.screen_width, self.screen_height
+                if zoom < 0.995:
+                    self.screen.fill((210, 212, 208))
+                    zw, zh = int(sw * zoom), int(sh * zoom)
+                    scaled = pygame.transform.smoothscale(world_surf, (zw, zh))
+                    self.screen.blit(scaled, ((sw - zw) // 2, (sh - zh) // 2))
+                else:
+                    self.screen.blit(world_surf, (0, 0))
+
         # Render UI on top
         self.ui.draw()
-        
+
         # Update display
         pygame.display.flip()
     
     def run(self):
         """Main game loop"""
-        print("Starting game loop...")
-        
         while self.running:
             # Calculate delta time
             current_time = time.time()
@@ -176,7 +166,6 @@ class MiniMetroGame:
             # Control frame rate
             self.clock.tick(60)
         
-        print("Game shutting down...")
         pygame.quit()
         sys.exit()
 
@@ -186,7 +175,8 @@ def main():
         game = MiniMetroGame()
         game.run()
     except Exception as e:
-        print(f"Error: {e}")
+        import traceback
+        traceback.print_exc()
         pygame.quit()
         sys.exit(1)
 

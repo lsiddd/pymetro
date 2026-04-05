@@ -86,8 +86,6 @@ class Train:
             next_station.x - current_station.x,
             next_station.y - current_station.y,
         )
-        if distance == 0:
-            self.progress = distance
 
         # Speed control with acceleration/deceleration
         # progress is in pixels traveled (0 → distance)
@@ -190,6 +188,21 @@ class Train:
             total += math.hypot(b[0] - a[0], b[1] - a[1])
         self._path_length = total if total > 0 else 1.0
 
+    def _get_angle_on_path(self, dist: float) -> float:
+        """Return the travel direction (radians) at arc-length *dist* along _path_pts."""
+        pts = self._path_pts
+        if not pts or len(pts) < 2:
+            return 0.0
+        remaining = max(0.0, dist)
+        for i in range(len(pts) - 1):
+            a, b = pts[i], pts[i + 1]
+            seg_len = math.hypot(b[0] - a[0], b[1] - a[1])
+            if remaining <= seg_len or i == len(pts) - 2:
+                return math.atan2(b[1] - a[1], b[0] - a[0])
+            remaining -= seg_len
+        # Fallback: direction of last segment
+        return math.atan2(pts[-1][1] - pts[-2][1], pts[-1][0] - pts[-2][0])
+
     def _get_pos_on_path(self, dist: float) -> tuple:
         """Return (x, y) at arc-length *dist* along self._path_pts."""
         pts = self._path_pts
@@ -208,6 +221,7 @@ class Train:
 
     def process_passengers(self, station: Any) -> None:
         """Handle passenger boarding and alighting"""
+        from state import game_state
         passengers_changed = 0
         
         # Alight passengers
@@ -220,6 +234,15 @@ class Train:
             else:
                 remaining_passengers.append(p)
         self.passengers = remaining_passengers
+
+        # Remove delivered passengers from the global list.
+        # Transferred passengers have on_train=None (set in _should_alight_passenger);
+        # delivered ones still point to this train.
+        for p in alighted_passengers:
+            if p.on_train is self:
+                p.on_train = None
+                if p in game_state.passengers:
+                    game_state.passengers.remove(p)
 
         # Board new passengers
         available_space = self.total_capacity - len(self.passengers)
@@ -359,9 +382,13 @@ class Train:
         if not current_st: return
         next_st = next_st or current_st
         
-        angle: float = 0.0
-        if next_st != current_st:
+        # Use path tangent for rotation so the train faces the right direction on curves
+        if self._path_pts and len(self._path_pts) >= 2:
+            angle = self._get_angle_on_path(self.progress)
+        elif next_st and next_st != current_st:
             angle = math.atan2(next_st.y - current_st.y, next_st.x - current_st.x)
+        else:
+            angle = 0.0
         
         n_units = 1 + self.carriage_count
         gap = 5
