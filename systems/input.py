@@ -217,10 +217,10 @@ class InputHandler:
         # Drop carriage on a train to attach it (or reallocate from another)
         if self.dragged_carriage:
             target_train = self._get_train_at_pos(pos)
-            if target_train and not target_train.has_carriage:
-                target_train.has_carriage = True
+            if target_train and target_train.carriage_count < CONFIG.MAX_CARRIAGES_PER_TRAIN:
+                target_train.carriage_count += 1
                 game_state.carriages -= 1
-                print(f"InputHandler: Attached carriage to train {target_train.id}")
+                print(f"InputHandler: Attached carriage to train {target_train.id} ({target_train.carriage_count} total)")
             self._reset_input_state()
             return True
 

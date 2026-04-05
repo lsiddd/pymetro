@@ -27,7 +27,7 @@ class Train:
         self.speed: float = 0
         self.max_speed: float = CONFIG.TRAIN_MAX_SPEED
         
-        self.has_carriage: bool = False
+        self.carriage_count: int = 0  # Number of carriages (0–MAX_CARRIAGES_PER_TRAIN)
         self.is_loop: bool = False
         
         if line.stations:
@@ -45,9 +45,12 @@ class Train:
             self.is_loop = False
     
     @property
+    def has_carriage(self) -> bool:
+        return self.carriage_count > 0
+
+    @property
     def total_capacity(self) -> int:
-        """Total capacity including carriage"""
-        return self.capacity + (CONFIG.TRAIN_CAPACITY if self.has_carriage else 0)
+        return self.capacity * (1 + self.carriage_count)
     
     def update(self, delta_time: float) -> None:
         """Update train movement and logic"""
@@ -124,8 +127,7 @@ class Train:
                     self.line.trains.remove(self)
                 
                 game_state.available_trains += 1
-                if self.has_carriage:
-                    game_state.carriages += 1
+                game_state.carriages += self.carriage_count
                 
                 # Stop any further processing for this decommissioned train
                 return
@@ -313,22 +315,24 @@ class Train:
         if next_st != current_st:
             angle = math.atan2(next_st.y - current_st.y, next_st.x - current_st.x)
         
-        total_width = width + (width + 5 if self.has_carriage else 0)
+        n_units = 1 + self.carriage_count
+        gap = 5
+        total_width = n_units * width + (n_units - 1) * gap
         train_surface = pygame.Surface((total_width, height), pygame.SRCALPHA)
-        
-        pygame.draw.rect(train_surface, self.line.color, (0, 0, width, height))
-        pygame.draw.rect(train_surface, (51, 51, 51), (0, 0, width, height), 2)
-        
-        if self.has_carriage:
-            pygame.draw.rect(train_surface, self.line.color, (width + 5, 0, width, height))
-            pygame.draw.rect(train_surface, (51, 51, 51), (width + 5, 0, width, height), 2)
-            pygame.draw.line(train_surface, (51, 51, 51), (width, height//2), (width + 5, height//2), 1)
-        
+
+        for u in range(n_units):
+            ux = u * (width + gap)
+            pygame.draw.rect(train_surface, self.line.color, (ux, 0, width, height))
+            pygame.draw.rect(train_surface, (51, 51, 51), (ux, 0, width, height), 2)
+            if u > 0:  # coupling line between units
+                pygame.draw.line(train_surface, (51, 51, 51),
+                                 (ux - gap, height // 2), (ux, height // 2), 1)
+
         if self.passengers:
             max_dots = min(len(self.passengers), 4)
             for i in range(max_dots):
-                dot_x = width//4 + (i % 2) * width//4
-                dot_y = height//4 + (i // 2) * height//4
+                dot_x = width // 4 + (i % 2) * width // 4
+                dot_y = height // 4 + (i // 2) * height // 4
                 pygame.draw.circle(train_surface, (255, 255, 255), (dot_x, dot_y), 2)
         
         rotated_surface = pygame.transform.rotate(train_surface, -math.degrees(angle))

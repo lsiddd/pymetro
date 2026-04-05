@@ -152,11 +152,12 @@ class Line:
                 refunded_bridges += 1
         game_state.bridges += refunded_bridges
         
-        # Return trains to available pool
+        # Return trains and carriages to available pool
         for train in self.trains[:]:
             if train in game_state.trains:
                 game_state.trains.remove(train)
             game_state.available_trains += 1
+            game_state.carriages += train.carriage_count
         
         # Reset line state
         self.stations = []
@@ -271,67 +272,158 @@ class Line:
         dy = point.y - yy
         return math.sqrt(dx * dx + dy * dy)
     
+    # Radius used for the Bézier corner fillet (px)
+    _FILLET_R: float = 14.0
+
     def draw(self, screen: pygame.Surface) -> None:
-        """Draw the line on screen"""
-        # --- CHANGE START ---
+        """Draw the line using 45°/90°-routed segments with smooth Bézier corners."""
         if (len(self.stations) < 2 and not self.marked_for_deletion) or not self.active:
             return
-        # --- CHANGE END ---
-        
+
         from state import game_state
-        
+
         for i in range(len(self.stations) - 1):
             s1 = self.stations[i]
             s2 = self.stations[i + 1]
-            
-            # Calculate offset for multiple lines between same stations
-            shared_lines = [line for line in game_state.lines
-                           if line.active and s1 in line.stations and s2 in line.stations
-                           and abs(line.stations.index(s1) - line.stations.index(s2)) == 1]
-            
-            line_index = next((i for i, line in enumerate(shared_lines) if line.index == self.index), 0)
-            offset = (line_index - (len(shared_lines) - 1) / 2) * (CONFIG.LINE_WIDTH + 2)
-            
-            # Calculate perpendicular offset
+
+            # Perpendicular offset when multiple lines share the same segment
+            shared_lines = [
+                line for line in game_state.lines
+                if line.active
+                and s1 in line.stations and s2 in line.stations
+                and abs(line.stations.index(s1) - line.stations.index(s2)) == 1
+            ]
+            line_idx = next((j for j, l in enumerate(shared_lines) if l.index == self.index), 0)
+            offset = (line_idx - (len(shared_lines) - 1) / 2) * (CONFIG.LINE_WIDTH + 2)
+
             dx = s2.x - s1.x
             dy = s2.y - s1.y
             length = math.sqrt(dx * dx + dy * dy)
-            if length > 0:
-                nx = -dy / length
-                ny = dx / length
-                
-                start_x = s1.x + offset * nx
-                start_y = s1.y + offset * ny
-                end_x = s2.x + offset * nx
-                end_y = s2.y + offset * ny
-                
-                # Check if crosses river
-                crosses_river = self.check_river_crossing(s1, s2)
-                
-                # --- CHANGE START ---
-                # Use a faded color if marked for deletion
-                line_color = self.color
-                if self.marked_for_deletion:
-                    line_color = (
-                        int(self.color[0] * 0.5 + 128 * 0.5),
-                        int(self.color[1] * 0.5 + 128 * 0.5),
-                        int(self.color[2] * 0.5 + 128 * 0.5)
-                    )
+            if length == 0:
+                continue
 
-                if crosses_river:
-                    # Draw dashed line for bridge
-                    self._draw_dashed_line(screen, start_x, start_y, end_x, end_y, 
-                                         line_color, int(CONFIG.LINE_WIDTH * 0.8))
-                elif self.marked_for_deletion:
-                    # Always draw marked lines as dashed
-                    self._draw_dashed_line(screen, start_x, start_y, end_x, end_y,
-                                         line_color, CONFIG.LINE_WIDTH)
-                else:
-                    # Draw solid line
-                    pygame.draw.line(screen, line_color, 
-                                   (start_x, start_y), (end_x, end_y), CONFIG.LINE_WIDTH)
-                # --- CHANGE END ---
+            nx = -dy / length
+            ny = dx / length
+
+            # Apply perpendicular offset to both endpoints
+            p1 = (s1.x + offset * nx, s1.y + offset * ny)
+            p2 = (s2.x + offset * nx, s2.y + offset * ny)
+
+            line_color = self.color
+            if self.marked_for_deletion:
+                line_color = (
+                    int(self.color[0] * 0.5 + 128 * 0.5),
+                    int(self.color[1] * 0.5 + 128 * 0.5),
+                    int(self.color[2] * 0.5 + 128 * 0.5),
+                )
+
+            crosses_river = self.check_river_crossing(s1, s2)
+            dashed = crosses_river or self.marked_for_deletion
+            w = int(CONFIG.LINE_WIDTH * 0.8) if crosses_river else CONFIG.LINE_WIDTH
+
+            waypoints = self._compute_metro_waypoints(p1, p2)
+            self._draw_metro_path(screen, waypoints, line_color, w, dashed)
     
+    # ------------------------------------------------------------------
+    # Metro-style 45°/90° routing helpers
+    # ------------------------------------------------------------------
+
+    def _compute_metro_waypoints(
+        self, p1: Tuple[float, float], p2: Tuple[float, float]
+    ) -> List[Tuple[float, float]]:
+        """Return 2 or 3 waypoints that route p1→p2 at 45°/90° angles.
+
+        If the segment is already axis-aligned or perfectly diagonal, return
+        the two endpoints directly.  Otherwise insert one elbow so that the
+        path travels diagonally first, then axis-aligned.
+        """
+        dx = p2[0] - p1[0]
+        dy = p2[1] - p1[1]
+        adx, ady = abs(dx), abs(dy)
+
+        # Straight or near-straight: skip elbow
+        if adx < 2 or ady < 2 or abs(adx - ady) < 2:
+            return [p1, p2]
+
+        sx = 1 if dx > 0 else -1
+        sy = 1 if dy > 0 else -1
+        diag = min(adx, ady)
+        elbow = (p1[0] + diag * sx, p1[1] + diag * sy)
+        return [p1, elbow, p2]
+
+    def _draw_metro_path(
+        self,
+        screen: pygame.Surface,
+        pts: List[Tuple[float, float]],
+        color: Tuple[int, int, int],
+        width: int,
+        dashed: bool = False,
+    ) -> None:
+        """Draw a list of waypoints as a metro-style path.
+
+        For a 3-point path, the corner at the middle point is smoothed with a
+        quadratic Bézier curve (fillet).
+        """
+        if len(pts) == 2:
+            if dashed:
+                self._draw_dashed_line(screen, pts[0][0], pts[0][1],
+                                       pts[1][0], pts[1][1], color, width)
+            else:
+                pygame.draw.line(screen, color,
+                                 (int(pts[0][0]), int(pts[0][1])),
+                                 (int(pts[1][0]), int(pts[1][1])), width)
+            return
+
+        # 3-point path: draw two segments meeting at an elbow with a fillet
+        p0, p1, p2 = pts
+        r = self._FILLET_R
+
+        d01 = self._unit_vec(p1[0] - p0[0], p1[1] - p0[1])
+        d12 = self._unit_vec(p2[0] - p1[0], p2[1] - p1[1])
+
+        # Tangent points where the fillet meets the straight segments
+        ta = (p1[0] - d01[0] * r, p1[1] - d01[1] * r)
+        tb = (p1[0] + d12[0] * r, p1[1] + d12[1] * r)
+
+        if dashed:
+            self._draw_dashed_line(screen, p0[0], p0[1], ta[0], ta[1], color, width)
+            self._draw_bezier_corner(screen, color, ta, p1, tb, width, dashed=True)
+            self._draw_dashed_line(screen, tb[0], tb[1], p2[0], p2[1], color, width)
+        else:
+            pygame.draw.line(screen, color,
+                             (int(p0[0]), int(p0[1])), (int(ta[0]), int(ta[1])), width)
+            self._draw_bezier_corner(screen, color, ta, p1, tb, width)
+            pygame.draw.line(screen, color,
+                             (int(tb[0]), int(tb[1])), (int(p2[0]), int(p2[1])), width)
+
+    def _draw_bezier_corner(
+        self,
+        screen: pygame.Surface,
+        color: Tuple[int, int, int],
+        pa: Tuple[float, float],
+        pb: Tuple[float, float],
+        pc: Tuple[float, float],
+        width: int,
+        dashed: bool = False,
+        n: int = 10,
+    ) -> None:
+        """Quadratic Bézier from pa through pb to pc (used for smooth corners)."""
+        pts = []
+        for i in range(n + 1):
+            t = i / n
+            x = (1 - t) ** 2 * pa[0] + 2 * (1 - t) * t * pb[0] + t ** 2 * pc[0]
+            y = (1 - t) ** 2 * pa[1] + 2 * (1 - t) * t * pb[1] + t ** 2 * pc[1]
+            pts.append((int(x), int(y)))
+        for i in range(len(pts) - 1):
+            pygame.draw.line(screen, color, pts[i], pts[i + 1], width)
+
+    @staticmethod
+    def _unit_vec(dx: float, dy: float) -> Tuple[float, float]:
+        d = math.sqrt(dx * dx + dy * dy)
+        if d < 1e-6:
+            return (0.0, 0.0)
+        return (dx / d, dy / d)
+
     def _draw_dashed_line(self, screen: pygame.Surface, x1: float, y1: float, x2: float, y2: float, color: Tuple[int, int, int], width: int) -> None:
         """Draw a dashed line"""
         dx = x2 - x1

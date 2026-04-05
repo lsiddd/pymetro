@@ -176,8 +176,19 @@ def build_station_graph_with_lines():
     return _graph_manager.get_graph()
 
 def mark_graph_dirty():
-    """Mark the cached graph as dirty so it will be rebuilt on next access"""
+    """Mark the cached graph as dirty and immediately recalculate waiting passengers."""
     _graph_manager.mark_dirty()
+    _recalculate_waiting_passengers()
+
+def _recalculate_waiting_passengers():
+    """Recalculate routes for all passengers currently waiting at a station."""
+    try:
+        from state import game_state
+        for passenger in game_state.passengers:
+            if passenger.on_train is None:
+                passenger.recalculate_path()
+    except Exception:
+        pass  # May be called before game_state is fully initialised
 
 def find_optimal_path(graph, start, end):
     """Encontra o caminho usando o algoritmo A* otimizado com came_from dictionary"""

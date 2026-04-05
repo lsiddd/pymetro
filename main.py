@@ -67,16 +67,19 @@ class MiniMetroGame:
                     print(f"MiniMetro: UI handled click: {ui_result}")
                 else:
                     if self.game.initialized and not self.ui.show_start_screen:
-                        self.input_handler.handle_mouse_down(event.pos, event.button)
-            
+                        world_pos = self._to_world_pos(event.pos)
+                        self.input_handler.handle_mouse_down(world_pos, event.button)
+
             elif event.type == pygame.MOUSEBUTTONUP:
                 print(f"MiniMetro: Mouse button {event.button} up at {event.pos}")
                 if self.game.initialized and not self.ui.show_start_screen:
-                    self.input_handler.handle_mouse_up(event.pos, event.button)
-            
+                    world_pos = self._to_world_pos(event.pos)
+                    self.input_handler.handle_mouse_up(world_pos, event.button)
+
             elif event.type == pygame.MOUSEMOTION:
                 if self.game.initialized and not self.ui.show_start_screen:
-                    self.input_handler.handle_mouse_motion(event.pos)
+                    world_pos = self._to_world_pos(event.pos)
+                    self.input_handler.handle_mouse_motion(world_pos)
             
             elif event.type == pygame.KEYDOWN:
                 print(f"MiniMetro: Key pressed: {pygame.key.name(event.key)}")
@@ -92,6 +95,17 @@ class MiniMetroGame:
                         game_state.selected_line = line_num
                         print(f"MiniMetro: Selected line {line_num}")
     
+    def _to_world_pos(self, screen_pos):
+        """Convert screen position to game-world position accounting for camera zoom."""
+        zoom = game_state.camera_zoom
+        if zoom >= 0.995:
+            return screen_pos
+        sw, sh = self.screen_width, self.screen_height
+        zw, zh = sw * zoom, sh * zoom
+        ox = (sw - zw) / 2
+        oy = (sh - zh) / 2
+        return ((screen_pos[0] - ox) / zoom, (screen_pos[1] - oy) / zoom)
+
     def start_game(self):
         """Start a new game"""
         self.game.init_game(self.screen_width, self.screen_height)
@@ -106,8 +120,8 @@ class MiniMetroGame:
     
     def update(self, delta_time):
         """Update game logic"""
-        # Update input handler
-        mouse_pos = pygame.mouse.get_pos()
+        # Update input handler (mouse pos transformed to world space)
+        mouse_pos = self._to_world_pos(pygame.mouse.get_pos())
         mouse_pressed = pygame.mouse.get_pressed()[0]
         self.input_handler.update(mouse_pos, mouse_pressed)
         

@@ -37,9 +37,8 @@ class GameState:
         self.passengers_delivered: int = 0
         self.game_start_time: float = time.time() * 1000
         
-        # --- CHANGE START ---
-        self.difficulty_stage: int = 0 # For curriculum learning
-        # --- CHANGE END ---
+        self.difficulty_stage: int = 0
+        self.camera_zoom: float = 1.0   # Decreases over weeks → visual zoom-out
 
         # Apply city configuration
         city_config = CONFIG.CITIES[self.selected_city]

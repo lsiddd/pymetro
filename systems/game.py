@@ -160,7 +160,9 @@ class Game:
         if elapsed > CONFIG.WEEK_DURATION:
             game_state.week += 1
             game_state.week_start_time = current_time
-            game_state.available_trains += 1  # Always receive 1 locomotive per week
+            game_state.available_trains += 1
+            # Zoom out 3 % per week, down to 55 %
+            game_state.camera_zoom = max(0.55, 1.0 - (game_state.week - 1) * 0.03)
             return 'show_upgrades'
         
         # --- CHANGE START ---
@@ -224,49 +226,72 @@ class Game:
             game_state.passengers.append(passenger)
     
     def spawn_station(self, screen_width, screen_height):
-        """Spawn a new station"""
+        """Spawn a new station."""
         from state import game_state
-        
+
+        station_type = self.get_new_station_type()
+        special_types = STATION_TYPES.special_types()
+        is_special = station_type in special_types
+
         margin = 80
         min_distance = 120
         max_attempts = 500
-        
-        for attempt in range(max_attempts):
-            x = margin + random.random() * (screen_width - margin * 2)
-            y = margin + random.random() * (screen_height - margin * 2)
-            
-            # Check if position is valid
+
+        for _ in range(max_attempts):
+            if is_special:
+                # Special stations appear near the outer 25 % of the map edges
+                edge = random.randint(0, 3)  # top/right/bottom/left
+                border_depth = 0.25
+                if edge == 0:
+                    x = margin + random.random() * (screen_width - 2 * margin)
+                    y = margin + random.random() * screen_height * border_depth
+                elif edge == 1:
+                    x = screen_width - margin - random.random() * screen_width * border_depth
+                    y = margin + random.random() * (screen_height - 2 * margin)
+                elif edge == 2:
+                    x = margin + random.random() * (screen_width - 2 * margin)
+                    y = screen_height - margin - random.random() * screen_height * border_depth
+                else:
+                    x = margin + random.random() * screen_width * border_depth
+                    y = margin + random.random() * (screen_height - 2 * margin)
+            else:
+                x = margin + random.random() * (screen_width  - margin * 2)
+                y = margin + random.random() * (screen_height - margin * 2)
+
             too_close = any(math.hypot(s.x - x, s.y - y) < min_distance for s in game_state.stations)
-            in_river = any(river.contains(x, y) for river in game_state.rivers)
-            
+            in_river  = any(river.contains(x, y) for river in game_state.rivers)
+
             if not too_close and not in_river:
-                # Determine station type
-                station_type = self.get_new_station_type()
                 game_state.stations.append(Station(x, y, station_type))
                 return
-        
+
         print("Warning: Could not find valid position for new station")
     
+    # Weighted distribution matching original: circles are common, squares rare
+    _BASIC_WEIGHTS = [
+        (STATION_TYPES.CIRCLE,   6),
+        (STATION_TYPES.TRIANGLE, 3),
+        (STATION_TYPES.SQUARE,   1),
+    ]
+    _BASIC_POOL = sum([[t] * w for t, w in _BASIC_WEIGHTS], [])
+
     def get_new_station_type(self):
-        """Determine type for new station"""
+        """Determine type for new station, respecting original proportions."""
         from state import game_state
-        
+
         game_time = time.time() * 1000 - game_state.game_start_time
         minutes_played = game_time / 60000
-        
-        basic_types = STATION_TYPES.basic_types()
+
         special_types = STATION_TYPES.special_types()
-        
-        # After 2 minutes, 10% chance for special types
-        if minutes_played > 2 and random.random() < 0.1:
-            # Check for unused special types
+
+        # After 2 minutes, ~12 % chance for a special type
+        if minutes_played > 2 and random.random() < 0.12:
             used_special = {s.type for s in game_state.stations if s.type in special_types}
             available_special = [t for t in special_types if t not in used_special]
-            
             if available_special:
                 return random.choice(available_special)
-        
-        return random.choice(basic_types)
+
+        return random.choice(self._BASIC_POOL)
     
     def check_game_over(self):
         """Check if game over conditions are met"""
@@ -282,28 +307,34 @@ class Game:
         return False
     
     def render(self, screen):
-        """Render the game world"""
+        """Render the game world, applying camera zoom when > week 1."""
         from state import game_state
-        from systems.input import InputHandler
-        
-        # Clear screen with background color
-        screen.fill((244, 241, 233))
-        
+
         if not self.initialized:
+            screen.fill((244, 241, 233))
             return
-        
-        # Draw rivers
+
+        sw, sh = screen.get_width(), screen.get_height()
+        zoom = game_state.camera_zoom
+
+        # Render world to an intermediate surface
+        world_surf = pygame.Surface((sw, sh))
+        world_surf.fill((244, 241, 233))
+
         for river in game_state.rivers:
-            river.draw(screen)
-        
-        # Draw metro lines
+            river.draw(world_surf)
         for line in game_state.lines:
-            line.draw(screen)
-        
-        # Draw stations
+            line.draw(world_surf)
         for station in game_state.stations:
-            station.draw(screen)
-        
-        # Draw trains
+            station.draw(world_surf)
         for train in game_state.trains:
-            train.draw(screen)
+            train.draw(world_surf)
+
+        if zoom < 0.995:
+            # Scale the game world down and centre it; expose a neutral border
+            screen.fill((210, 212, 208))
+            zw, zh = int(sw * zoom), int(sh * zoom)
+            scaled = pygame.transform.smoothscale(world_surf, (zw, zh))
+            screen.blit(scaled, ((sw - zw) // 2, (sh - zh) // 2))
+        else:
+            screen.blit(world_surf, (0, 0))
