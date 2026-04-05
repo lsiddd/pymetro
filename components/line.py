@@ -420,6 +420,46 @@ class Line:
             return (0.0, 0.0)
         return (dx / d, dy / d)
 
+    def get_train_waypoints(self, s1: Any, s2: Any) -> List[Tuple[float, float]]:
+        """Return the actual polyline the train should follow between s1 and s2.
+
+        Computes the same offset as draw() and expands the Bézier corner into
+        sampled points so trains follow the visual path exactly.
+        """
+        from state import game_state
+
+        shared = sorted(
+            [l for l in game_state.lines if l.active and l._has_segment(s1, s2)],
+            key=lambda l: l.index,
+        )
+        n = len(shared)
+        my_rank = next((j for j, l in enumerate(shared) if l.index == self.index), 0)
+        offset = (my_rank - (n - 1) / 2.0) * (CONFIG.LINE_WIDTH + 3)
+
+        base = self._compute_metro_waypoints((s1.x, s1.y), (s2.x, s2.y))
+        pts = self._offset_path(base, offset) if abs(offset) > 0.01 else list(base)
+
+        if len(pts) == 2:
+            return pts
+
+        # 3-point path: expand the Bézier corner into polyline samples
+        p0, p1, p2 = pts
+        r = self._FILLET_R
+        d01 = self._unit_vec(p1[0] - p0[0], p1[1] - p0[1])
+        d12 = self._unit_vec(p2[0] - p1[0], p2[1] - p1[1])
+        ta = (p1[0] - d01[0] * r, p1[1] - d01[1] * r)
+        tb = (p1[0] + d12[0] * r, p1[1] + d12[1] * r)
+
+        bezier_pts: List[Tuple[float, float]] = []
+        n_b = 10
+        for i in range(n_b + 1):
+            t = i / n_b
+            x = (1 - t) ** 2 * ta[0] + 2 * (1 - t) * t * p1[0] + t ** 2 * tb[0]
+            y = (1 - t) ** 2 * ta[1] + 2 * (1 - t) * t * p1[1] + t ** 2 * tb[1]
+            bezier_pts.append((x, y))
+
+        return [p0] + bezier_pts + [p2]
+
     def _has_segment(self, s1: Any, s2: Any) -> bool:
         """Return True if s1 and s2 appear as consecutive stations on this line."""
         stations = self.stations

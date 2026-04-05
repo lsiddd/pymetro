@@ -15,17 +15,13 @@ class Game:
     def __init__(self):
         self.initialized = False
     
-    # --- CHANGE START ---
-    def init_game(self, screen_width, screen_height, difficulty_stage=0):
-    # --- CHANGE END ---
+    def init_game(self, screen_width, screen_height):
         """Initialize new game"""
         from state import game_state
-        
+
         selected_city = game_state.selected_city  # Preserve city selection across reset
         game_state.reset()
         game_state.set_city(selected_city)
-
-        game_state.difficulty_stage = difficulty_stage
 
         # Create lines
         game_state.lines = []
@@ -165,17 +161,9 @@ class Game:
             game_state.camera_zoom = max(0.55, 1.0 - (game_state.week - 1) * 0.03)
             return 'show_upgrades'
         
-        # --- CHANGE START ---
-        # Progressive difficulty scaling using curriculum learning stage
-        difficulty_settings = CONFIG.DIFFICULTY_LEVELS[game_state.difficulty_stage]
         difficulty_multiplier = CONFIG.DIFFICULTY_SCALE_FACTOR ** (game_state.week - 1)
-        
-        passenger_multiplier = difficulty_settings['passenger_spawn_multiplier']
-        station_multiplier = difficulty_settings['station_spawn_multiplier']
-
-        current_spawn_rate = CONFIG.BASE_SPAWN_RATE * difficulty_multiplier * passenger_multiplier
-        current_station_spawn_rate = CONFIG.BASE_STATION_SPAWN_RATE * difficulty_multiplier * station_multiplier
-        # --- CHANGE END ---
+        current_spawn_rate = CONFIG.BASE_SPAWN_RATE * difficulty_multiplier
+        current_station_spawn_rate = CONFIG.BASE_STATION_SPAWN_RATE * difficulty_multiplier
         
         # Spawn passengers
         if current_time - game_state.last_spawn_time > current_spawn_rate / game_state.speed:

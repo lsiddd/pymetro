@@ -23,9 +23,13 @@ class Train:
         
         self.state: str = 'WAITING'  # WAITING, MOVING
         self.wait_timer: float = 0
-        
+
         self.speed: float = 0
         self.max_speed: float = CONFIG.TRAIN_MAX_SPEED
+
+        # Arc-length path for the current segment
+        self._path_pts: List[Any] = []
+        self._path_length: float = 0.0
         
         self.carriage_count: int = 0  # Number of carriages (0–MAX_CARRIAGES_PER_TRAIN)
         self.is_loop: bool = False
@@ -66,45 +70,42 @@ class Train:
                 self.state = 'MOVING'
                 self.determine_next_station()
             return
-        
+
         self.check_loop_status()
-        
+
         current_station = self.line.stations[self.current_station_index] if self.current_station_index < len(self.line.stations) else None
         next_station = self.line.stations[self.next_station_index] if self.next_station_index < len(self.line.stations) else None
-        
+
         if not current_station or not next_station:
             self.state = 'WAITING'
             self.wait_timer = 100
             return
-        
-        # Calculate movement vector
-        dx = next_station.x - current_station.x
-        dy = next_station.y - current_station.y
-        distance = math.sqrt(dx * dx + dy * dy)
-        
+
+        # Use arc-length of the routed visual path, falling back to straight distance
+        distance = self._path_length if self._path_length > 0 else math.hypot(
+            next_station.x - current_station.x,
+            next_station.y - current_station.y,
+        )
         if distance == 0:
-            # This can happen if a line has duplicate consecutive stations. Let's force progress.
-            self.progress = 1
-        
+            self.progress = distance
+
         # Speed control with acceleration/deceleration
+        # progress is in pixels traveled (0 → distance)
         accel_dist = min(distance * 0.4, 60)
         decel_start = max(distance - accel_dist, distance * 0.6)
-        current_pos = self.progress * distance
-        
-        if current_pos < accel_dist:
+
+        if self.progress < accel_dist:
             self.speed = min(self.max_speed, self.speed + CONFIG.TRAIN_ACCELERATION * delta_time)
-        elif current_pos > decel_start:
+        elif self.progress > decel_start:
             self.speed = max(0.2 * self.max_speed, self.speed - CONFIG.TRAIN_ACCELERATION * delta_time)
         else:
             self.speed = self.max_speed
-        
-        # Update position
-        if distance > 0: # Avoid division by zero
-             self.progress += (self.speed * game_state.speed * (delta_time / 16.67)) / distance
-        
-        if self.progress >= 1:
+
+        self.progress += self.speed * game_state.speed * (delta_time / 16.67)
+
+        if self.progress >= distance:
             # Arrived at next station
-            self.progress = 1
+            self.progress = distance
             self.x = next_station.x
             self.y = next_station.y
             self.current_station_index = self.next_station_index
@@ -136,16 +137,24 @@ class Train:
             self.process_passengers(next_station)
             self.speed = 0
         else:
-            # Interpolate position
-            self.x = current_station.x + dx * self.progress
-            self.y = current_station.y + dy * self.progress
+            # Interpolate position along the routed visual path
+            if self._path_pts:
+                self.x, self.y = self._get_pos_on_path(self.progress)
+            else:
+                dx = next_station.x - current_station.x
+                dy = next_station.y - current_station.y
+                d = math.hypot(dx, dy)
+                if d > 0:
+                    frac = self.progress / d
+                    self.x = current_station.x + dx * frac
+                    self.y = current_station.y + dy * frac
         
 
     def determine_next_station(self) -> None:
         """Determine next station to travel to"""
         if self.current_station_index >= len(self.line.stations):
             self.current_station_index = 0
-        
+
         if self.is_loop:
             self.next_station_index = (self.current_station_index + 1) % (len(self.line.stations) - 1)
         else:
@@ -153,10 +162,49 @@ class Train:
                 self.direction = -1
             elif self.current_station_index == 0:
                 self.direction = 1
-            
             self.next_station_index = self.current_station_index + self.direction
-        
-        self.progress = 0
+
+        self.progress = 0.0
+        self._compute_path_waypoints()
+
+    def _compute_path_waypoints(self) -> None:
+        """Compute the visual waypoints for the current segment and store arc-length."""
+        stations = self.line.stations
+        if (self.current_station_index >= len(stations) or
+                self.next_station_index >= len(stations) or
+                self.next_station_index < 0):
+            self._path_pts = []
+            self._path_length = 0.0
+            return
+
+        s1 = stations[self.current_station_index]
+        s2 = stations[self.next_station_index]
+        try:
+            self._path_pts = self.line.get_train_waypoints(s1, s2)
+        except Exception:
+            self._path_pts = [(s1.x, s1.y), (s2.x, s2.y)]
+
+        total = 0.0
+        for i in range(len(self._path_pts) - 1):
+            a, b = self._path_pts[i], self._path_pts[i + 1]
+            total += math.hypot(b[0] - a[0], b[1] - a[1])
+        self._path_length = total if total > 0 else 1.0
+
+    def _get_pos_on_path(self, dist: float) -> tuple:
+        """Return (x, y) at arc-length *dist* along self._path_pts."""
+        pts = self._path_pts
+        if not pts:
+            return (self.x, self.y)
+        remaining = max(0.0, dist)
+        for i in range(len(pts) - 1):
+            a, b = pts[i], pts[i + 1]
+            seg_len = math.hypot(b[0] - a[0], b[1] - a[1])
+            if remaining <= seg_len or i == len(pts) - 2:
+                t = (remaining / seg_len) if seg_len > 1e-6 else 1.0
+                t = min(t, 1.0)
+                return (a[0] + t * (b[0] - a[0]), a[1] + t * (b[1] - a[1]))
+            remaining -= seg_len
+        return pts[-1]
 
     def process_passengers(self, station: Any) -> None:
         """Handle passenger boarding and alighting"""
