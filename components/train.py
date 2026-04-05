@@ -2,8 +2,8 @@
 import pygame
 import math
 import time
-from typing import List, Optional, Set, Any
-from config import CONFIG, STATION_TYPES
+from typing import List, Any
+from config import CONFIG
 
 class Train:
     def __init__(self, line: Any):

@@ -11,7 +11,7 @@ class GameState:
     def reset(self) -> None:
         """Reset game state to initial values"""
         self.paused: bool = False
-        self.speed: int = 1
+        self.speed: float = 1.0
         self.score: int = 0
         self.week: int = 1
         self.day: int = 0

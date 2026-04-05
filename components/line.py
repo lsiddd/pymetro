@@ -2,7 +2,7 @@
 import pygame
 import math
 import time
-from typing import List, Optional, Tuple, Dict, Any, Union
+from typing import List, Optional, Tuple, Any
 from config import CONFIG
 
 class Line:
@@ -312,7 +312,11 @@ class Line:
 
             line_color = self.color
             if self.marked_for_deletion:
-                line_color = tuple(int(c * 0.5 + 128 * 0.5) for c in self.color)  # type: ignore[assignment]
+                line_color = (
+                    int(self.color[0] * 0.5 + 128 * 0.5),
+                    int(self.color[1] * 0.5 + 128 * 0.5),
+                    int(self.color[2] * 0.5 + 128 * 0.5)
+                )
 
             crosses_river = self.check_river_crossing(s1, s2)
             dashed = crosses_river or self.marked_for_deletion

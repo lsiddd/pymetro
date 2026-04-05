@@ -8,7 +8,6 @@ from config import CONFIG, STATION_TYPES
 from components.station import Station
 from components.passenger import Passenger
 from components.line import Line
-from components.train import Train
 from components.river import River
 
 class Game:

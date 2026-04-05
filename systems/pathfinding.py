@@ -216,7 +216,7 @@ def find_optimal_path(graph, start, end):
     counter = itertools.count()
     
     # Fila de prioridade: (f_score, g_score, transfers, counter, current_station, last_line)
-    open_set = [(0, 0, 0, next(counter), start, None)]
+    open_set = [(0.0, 0, 0, next(counter), start, None)]
     visited = set()
     
     # Dicionários para reconstruir o caminho

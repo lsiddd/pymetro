@@ -1,6 +1,5 @@
 import pygame
 import math
-import time
 from config import CONFIG
 
 class InputHandler:
@@ -99,8 +98,6 @@ class InputHandler:
     def handle_mouse_down(self, pos, button):
         """Handle mouse button down - matches JS version logic"""
         from state import game_state
-        from components.train import Train
-        from systems.ui import update_resource_display
         
         if game_state.game_over:
             return False
@@ -180,7 +177,6 @@ class InputHandler:
         """Handle mouse button up - matches JS version logic"""
         from state import game_state
         from components.train import Train
-        from systems.ui import update_resource_display
         
         if button != 1:
             return False

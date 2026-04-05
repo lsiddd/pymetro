@@ -3,7 +3,6 @@
 import pygame
 import sys
 import time
-from config import CONFIG
 from state import game_state
 from systems.game import Game
 from systems.ui import UI
@@ -174,7 +173,7 @@ def main():
     try:
         game = MiniMetroGame()
         game.run()
-    except Exception as e:
+    except Exception:
         import traceback
         traceback.print_exc()
         pygame.quit()

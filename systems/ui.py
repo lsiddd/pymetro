@@ -50,7 +50,6 @@ class UI:
     
     def draw(self):
         """Draw all UI elements"""
-        from state import game_state
         
         if self.show_start_screen:
             self.draw_start_screen()
@@ -449,7 +448,6 @@ class UI:
     
     def handle_click(self, pos):
         """Handle mouse click events"""
-        from state import game_state
         
         if self.show_start_screen:
             return self.handle_start_screen_click(pos)
