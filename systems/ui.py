@@ -27,6 +27,9 @@ class UI:
         self.pause_btn_rect = pygame.Rect(self.width - 100, 10, 40, 40)
         self.speed_btn_rect = pygame.Rect(self.width - 50, 10, 40, 40)
         self.ga_btn_rect = pygame.Rect(self.width - 150, 10, 40, 40)
+        self.spawn_btn_rect = pygame.Rect(self.width - 200, 10, 40, 40)
+        self.deep_ga_btn_rect = pygame.Rect(self.width - 250, 10, 40, 40)
+        self.instant_spawn_btn_rect = pygame.Rect(self.width - 300, 10, 40, 40)
         self.line_selector_rects = []
         self.line_delete_rects = []
         self.city_btn_rects = {}
@@ -48,6 +51,9 @@ class UI:
         self.pause_btn_rect = pygame.Rect(self.width - 100, 10, 40, 40)
         self.speed_btn_rect = pygame.Rect(self.width - 50, 10, 40, 40)
         self.ga_btn_rect = pygame.Rect(self.width - 150, 10, 40, 40)
+        self.spawn_btn_rect = pygame.Rect(self.width - 200, 10, 40, 40)
+        self.deep_ga_btn_rect = pygame.Rect(self.width - 250, 10, 40, 40)
+        self.instant_spawn_btn_rect = pygame.Rect(self.width - 300, 10, 40, 40)
     
     def draw(self):
         """Draw all UI elements"""
@@ -295,6 +301,37 @@ class UI:
         
         lbl_ga = self.small_font.render("AI", True, fg3)
         self.screen.blit(lbl_ga, lbl_ga.get_rect(center=(cx3, cy3)))
+
+        # --- Spawn limit button ---
+        cx4, cy4 = getattr(self, 'spawn_btn_rect', pygame.Rect(self.width - 200, 10, 40, 40)).center
+        spawn_enabled = game_state.spawn_stations_enabled
+        bg4 = (76, 175, 80) if spawn_enabled else (231, 76, 60) # green or red
+        fg4 = (255, 255, 255)
+        pygame.draw.circle(self.screen, bg4, (cx4, cy4), 20)
+        pygame.draw.circle(self.screen, (51, 51, 51), (cx4, cy4), 20, 2)
+        
+        lbl_sp = self.small_font.render("SP", True, fg4)
+        self.screen.blit(lbl_sp, lbl_sp.get_rect(center=(cx4, cy4)))
+
+        # --- Deep GA button ---
+        cx_dga, cy_dga = getattr(self, 'deep_ga_btn_rect', pygame.Rect(self.width - 250, 10, 40, 40)).center
+        bg_dga = (102, 51, 255)  # purple
+        fg_dga = (255, 255, 255)
+        pygame.draw.circle(self.screen, bg_dga, (cx_dga, cy_dga), 20)
+        pygame.draw.circle(self.screen, (51, 51, 51), (cx_dga, cy_dga), 20, 2)
+        
+        lbl_dga = self.small_font.render("AI+", True, fg_dga)
+        self.screen.blit(lbl_dga, lbl_dga.get_rect(center=(cx_dga, cy_dga)))
+
+        # --- Instant Spawn button ---
+        cx_isp, cy_isp = getattr(self, 'instant_spawn_btn_rect', pygame.Rect(self.width - 300, 10, 40, 40)).center
+        bg_isp = (255, 153, 51)  # orange
+        fg_isp = (255, 255, 255)
+        pygame.draw.circle(self.screen, bg_isp, (cx_isp, cy_isp), 20)
+        pygame.draw.circle(self.screen, (51, 51, 51), (cx_isp, cy_isp), 20, 2)
+        
+        lbl_isp = self.small_font.render("GEN", True, fg_isp)
+        self.screen.blit(lbl_isp, lbl_isp.get_rect(center=(cx_isp, cy_isp)))
     
     def draw_line_selector(self):
         """Draw line selection buttons at bottom"""
@@ -521,6 +558,16 @@ class UI:
 
         if getattr(self, 'ga_btn_rect', None) and self.ga_btn_rect.collidepoint(pos):
             return 'start_ga'
+
+        if getattr(self, 'spawn_btn_rect', None) and self.spawn_btn_rect.collidepoint(pos):
+            game_state.spawn_stations_enabled = not game_state.spawn_stations_enabled
+            return True
+
+        if getattr(self, 'deep_ga_btn_rect', None) and self.deep_ga_btn_rect.collidepoint(pos):
+            return 'start_deep_ga'
+            
+        if getattr(self, 'instant_spawn_btn_rect', None) and self.instant_spawn_btn_rect.collidepoint(pos):
+            return 'instant_spawn'
 
         # Line delete buttons
         for rect, line_index in self.line_delete_rects:
