@@ -1,7 +1,7 @@
 import pygame
 import math
-import time
 from config import CONFIG, STATION_TYPES
+from state import now_ms
 
 class Station:
     def __init__(self, x, y, station_type):
@@ -38,18 +38,18 @@ class Station:
     def check_overcrowd(self):
         if len(self.passengers) > self.capacity:
             if not self.overcrowd_start_time:
-                self.overcrowd_start_time = time.time() * 1000
+                self.overcrowd_start_time = now_ms()
         else:
             self.overcrowd_start_time = None
     
     def draw(self, screen):
         # Draw overcrowd animation first
         if self.overcrowd_start_time:
-            elapsed = time.time() * 1000 - self.overcrowd_start_time
+            elapsed = now_ms() - self.overcrowd_start_time
             progress = elapsed / CONFIG.OVERCROWD_TIME
-            
+
             # Pulsing glow effect
-            pulse = int(CONFIG.STATION_RADIUS + 8 + math.sin(time.time() * 1000 / 150) * 5)
+            pulse = int(CONFIG.STATION_RADIUS + 8 + math.sin(now_ms() / 150) * 5)
             glow_size = pulse * 2 + 4
             glow_surface = pygame.Surface((glow_size, glow_size), pygame.SRCALPHA)
             cx = glow_size // 2
@@ -73,7 +73,7 @@ class Station:
             
             # Upgrade animation
             if self.animate_upgrade:
-                elapsed = time.time() * 1000 - self.animate_upgrade['start_time']
+                elapsed = now_ms() - self.animate_upgrade['start_time']
                 progress = elapsed / self.animate_upgrade['duration']
                 
                 if progress < 1:
@@ -85,7 +85,7 @@ class Station:
         
         # Draw delivery animation
         if self.delivery_animation:
-            elapsed = time.time() * 1000 - self.delivery_animation['start_time']
+            elapsed = now_ms() - self.delivery_animation['start_time']
             progress = elapsed / self.delivery_animation['duration']
             
             if progress < 1:

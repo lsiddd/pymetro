@@ -9,8 +9,8 @@ from .fitness import calculate_fitness
 from .ga_cache import make_signature, load_cache, save_cache
 
 def _eval_wrapper(args):
-    chromosome, stations_data, seed, H = args
-    return calculate_fitness(chromosome, stations_data, seed, H)
+    chromosome, stations_data, seed, H, snapshot_week = args
+    return calculate_fitness(chromosome, stations_data, seed, H, snapshot_week)
 
 def _compute_diversity(population):
     unique = len({tuple(tuple(l) for l in c.lines) for c in population})
@@ -41,17 +41,19 @@ class GeneticAlgorithmTask(threading.Thread):
 
         seed_atual = 42
 
-        # Prepare lite stations data for multiprocessing
+        # Snapshot stations for multiprocessing workers
         lite_stations_data = [
             {
                 'id': s.id,
                 'type': s.type,
                 'x': s.x,
                 'y': s.y,
-                'passengers': [p.destination for p in s.passengers]
+                'passengers': [p.destination for p in s.passengers],
+                'is_interchange': s.is_interchange,
             }
             for s in self.game_state.stations
         ]
+        snapshot_week = self.game_state.week
 
         # Warm-start: inject cached chromosomes if map hasn't changed
         sig = make_signature(self.game_state.stations)
@@ -94,7 +96,7 @@ class GeneticAlgorithmTask(threading.Thread):
                 else:
                     H_gen = 5000
 
-                args_list = [(p, lite_stations_data, seed_atual, H_gen) for p in population]
+                args_list = [(p, lite_stations_data, seed_atual, H_gen, snapshot_week) for p in population]
                 fitnesses = list(executor.map(_eval_wrapper, args_list))
 
                 gen_best_idx = fitnesses.index(max(fitnesses))

@@ -1,6 +1,6 @@
 # ./state.py
 
-from typing import List, Any
+from typing import List, Any, Optional
 import time
 from config import CONFIG
 
@@ -39,6 +39,10 @@ class GameState:
 
         self.camera_zoom: float = 1.0   # Decreases over weeks → visual zoom-out
 
+        # Headless simulation clock (used by GA fitness evaluation)
+        self.headless: bool = False
+        self.sim_time_ms: float = 0.0
+
         # Apply city configuration
         city_config = CONFIG.CITIES[self.selected_city]
         self.bridges = city_config['bridges']
@@ -61,3 +65,14 @@ class GameState:
 
 # Global game state instance
 game_state: GameState = GameState()
+
+
+def now_ms() -> float:
+    """Current time in milliseconds.
+
+    In normal mode returns wall-clock time. In headless mode (GA fitness
+    evaluation) returns the virtual simulation clock so that all timing logic
+    in the engine — spawn rates, overcrowd timers, passenger patience — runs
+    on controllable, deterministic virtual time instead of real wall time.
+    """
+    return game_state.sim_time_ms if game_state.headless else time.time() * 1000

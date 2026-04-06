@@ -1,9 +1,9 @@
 # ./components/line.py
 import pygame
 import math
-import time
 from typing import List, Optional, Tuple, Any
 from config import CONFIG
+from state import now_ms
 
 class Line:
     def __init__(self, color: str, index: int):
@@ -224,7 +224,7 @@ class Line:
         """Animate station connection effect"""
         if station:
             station.connection_animation = {
-                'start_time': time.time() * 1000,
+                'start_time': now_ms(),
                 'duration': 300
             }
     

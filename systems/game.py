@@ -2,7 +2,6 @@
 
 import pygame
 import math
-import time
 import random
 from config import CONFIG, STATION_TYPES
 from components.station import Station
@@ -140,13 +139,12 @@ class Game:
     
     def update(self, delta_time, screen_width, screen_height):
         """Update game logic"""
-        from state import game_state
-        
-        
+        from state import game_state, now_ms
+
         if not self.initialized or game_state.game_over or game_state.paused:
             return
 
-        current_time = time.time() * 1000
+        current_time = now_ms()
         
         # Update week/day progression
         elapsed = current_time - game_state.week_start_time
@@ -264,9 +262,9 @@ class Game:
 
     def get_new_station_type(self):
         """Determine type for new station, respecting original proportions."""
-        from state import game_state
+        from state import game_state, now_ms
 
-        game_time = time.time() * 1000 - game_state.game_start_time
+        game_time = now_ms() - game_state.game_start_time
         minutes_played = game_time / 60000
 
         special_types = STATION_TYPES.special_types()
@@ -282,9 +280,9 @@ class Game:
     
     def check_game_over(self):
         """Check if game over conditions are met"""
-        from state import game_state
-        
-        current_time = time.time() * 1000
+        from state import game_state, now_ms
+
+        current_time = now_ms()
         
         for station in game_state.stations:
             if station.overcrowd_start_time:

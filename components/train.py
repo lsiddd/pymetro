@@ -1,9 +1,9 @@
 # ./components/train.py
 import pygame
 import math
-import time
 from typing import List, Any
 from config import CONFIG
+from state import now_ms
 
 class Train:
     def __init__(self, line: Any):
@@ -279,16 +279,16 @@ class Train:
         if passenger.destination == station.type:
             game_state.score += 1
             game_state.passengers_delivered += 1
-            station.delivery_animation = {'start_time': time.time() * 1000, 'duration': 500}
+            station.delivery_animation = {'start_time': now_ms(), 'duration': 500}
             return True
-        
+
         if passenger.path and len(passenger.path) > passenger.path_index and passenger.path[passenger.path_index] == station:
             passenger.path_index += 1
-            
+
             if passenger.path_index >= len(passenger.path): # Final destination
                 game_state.score += 1
                 game_state.passengers_delivered += 1
-                station.delivery_animation = {'start_time': time.time() * 1000, 'duration': 500}
+                station.delivery_animation = {'start_time': now_ms(), 'duration': 500}
                 return True
             
             # Check for transfer
