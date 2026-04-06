@@ -1,5 +1,4 @@
 # ./components/train.py
-import pygame
 import math
 from typing import List, Any
 from config import CONFIG
@@ -369,47 +368,3 @@ class Train:
         if new_line.stations: self.x, self.y = new_line.stations[0].x, new_line.stations[0].y
         self.check_loop_status()
     
-    def draw(self, screen: pygame.Surface) -> None:
-        """Draw the train on screen"""
-        # (This function can remain the same as the original, but with print statements removed)
-        if not self.line.active or len(self.line.stations) < 2: return
-            
-        width, height = CONFIG.TRAIN_WIDTH, CONFIG.TRAIN_HEIGHT
-        
-        current_st = self.line.stations[self.current_station_index] if self.current_station_index < len(self.line.stations) else None
-        next_st = self.line.stations[self.next_station_index] if self.next_station_index < len(self.line.stations) else None
-        
-        if not current_st: return
-        next_st = next_st or current_st
-        
-        # Use path tangent for rotation so the train faces the right direction on curves
-        if self._path_pts and len(self._path_pts) >= 2:
-            angle = self._get_angle_on_path(self.progress)
-        elif next_st and next_st != current_st:
-            angle = math.atan2(next_st.y - current_st.y, next_st.x - current_st.x)
-        else:
-            angle = 0.0
-        
-        n_units = 1 + self.carriage_count
-        gap = 5
-        total_width = n_units * width + (n_units - 1) * gap
-        train_surface = pygame.Surface((total_width, height), pygame.SRCALPHA)
-
-        for u in range(n_units):
-            ux = u * (width + gap)
-            pygame.draw.rect(train_surface, self.line.color, (ux, 0, width, height))
-            pygame.draw.rect(train_surface, (51, 51, 51), (ux, 0, width, height), 2)
-            if u > 0:  # coupling line between units
-                pygame.draw.line(train_surface, (51, 51, 51),
-                                 (ux - gap, height // 2), (ux, height // 2), 1)
-
-        if self.passengers:
-            max_dots = min(len(self.passengers), 4)
-            for i in range(max_dots):
-                dot_x = width // 4 + (i % 2) * width // 4
-                dot_y = height // 4 + (i // 2) * height // 4
-                pygame.draw.circle(train_surface, (255, 255, 255), (dot_x, dot_y), 2)
-        
-        rotated_surface = pygame.transform.rotate(train_surface, -math.degrees(angle))
-        rotated_rect = rotated_surface.get_rect(center=(int(self.x), int(self.y)))
-        screen.blit(rotated_surface, rotated_rect)

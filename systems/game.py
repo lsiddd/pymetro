@@ -1,6 +1,5 @@
 # ./systems/game.py
 
-import pygame
 import math
 import random
 from config import CONFIG, STATION_TYPES
@@ -291,32 +290,3 @@ class Game:
         
         return False
     
-    def render(self, screen):
-        """Render the game world into an intermediate surface and return it.
-
-        The caller is responsible for compositing the surface onto the screen
-        (with zoom + centering) so that overlays drawn afterwards (e.g. input
-        preview) land on the world surface before the final scale, keeping them
-        correctly aligned with game objects at all zoom levels.
-        """
-        from state import game_state
-
-        if not self.initialized:
-            screen.fill((244, 241, 233))
-            return None
-
-        sw, sh = screen.get_width(), screen.get_height()
-
-        world_surf = pygame.Surface((sw, sh))
-        world_surf.fill((244, 241, 233))
-
-        for river in game_state.rivers:
-            river.draw(world_surf)
-        for line in game_state.lines:
-            line.draw(world_surf)
-        for station in game_state.stations:
-            station.draw(world_surf)
-        for train in game_state.trains:
-            train.draw(world_surf)
-
-        return world_surf

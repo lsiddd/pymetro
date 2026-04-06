@@ -8,6 +8,7 @@ from systems.game import Game
 from systems.ui import UI
 from systems.input import InputHandler
 from systems.ai.ga import GeneticAlgorithmTask
+from rendering.game_renderer import GameRenderer
 
 class MiniMetroGame:
     def __init__(self):
@@ -21,6 +22,7 @@ class MiniMetroGame:
 
         # Initialize systems
         self.game = Game()
+        self.renderer = GameRenderer()
         self.ui = UI(self.screen)
         self.input_handler = InputHandler()
 
@@ -211,7 +213,7 @@ class MiniMetroGame:
     def render(self):
         """Render the game"""
         if self.game.initialized and not self.ui.show_start_screen:
-            world_surf = self.game.render(self.screen)
+            world_surf = self.renderer.render(self.screen, game_state)
 
             if world_surf is not None:
                 # Draw input preview onto the world surface so it scales with
