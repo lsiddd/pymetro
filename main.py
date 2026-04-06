@@ -58,6 +58,10 @@ class MiniMetroGame:
                     self.input_handler.dragged_interchange = True
                 elif ui_result == 'start_ga':
                     self.start_ga_optimization()
+                elif ui_result == 'start_deep_ga':
+                    self.start_deep_ga_optimization()
+                elif ui_result == 'instant_spawn':
+                    self.game.spawn_station(self.screen_width, self.screen_height)
                 elif not ui_result:
                     if self.game.initialized and not self.ui.show_start_screen and not self.ga_thread:
                         world_pos = self._to_world_pos(event.pos)
@@ -112,6 +116,20 @@ class MiniMetroGame:
         if self.ga_thread is not None and self.ga_thread.is_alive(): return
         game_state.paused = True
         self.ga_thread = GeneticAlgorithmTask(game_state, self._on_ga_complete)
+        self.ga_thread.start()
+        
+    def start_deep_ga_optimization(self):
+        """Start deep GA algorithm thread with larger population, more generations and longer horizon"""
+        if self.ga_thread is not None and self.ga_thread.is_alive(): return
+        game_state.paused = True
+        # Set parameters for a deeper search
+        self.ga_thread = GeneticAlgorithmTask(
+            game_state, 
+            self._on_ga_complete,
+            pop_size=300,        # Default was 200
+            gen_max=100,         # Default was 50
+            sim_horizon=10000     # Default was 3000
+        )
         self.ga_thread.start()
         
     def _on_ga_complete(self, chromosome):

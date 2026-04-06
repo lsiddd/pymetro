@@ -17,6 +17,10 @@ class Chromosome:
         # Track if the line is closed in a loop.
         self.is_loop: List[bool] = [False for _ in range(num_lines)]
 
+        # Direction for loop lines: 'both', 'forward', or 'backward'.
+        # 'both' spawns trains in opposite directions; 'forward'/'backward' sends all trains one way.
+        self.loop_direction: List[str] = ['both' for _ in range(num_lines)]
+
     def copy(self) -> 'Chromosome':
         new_c = Chromosome(len(self.lines))
         # Shallow copy of the inner lists is enough since stations are immutable here
@@ -24,6 +28,7 @@ class Chromosome:
         new_c.trains_per_line = self.trains_per_line[:]
         new_c.carriages_per_line = self.carriages_per_line[:]
         new_c.is_loop = self.is_loop[:]
+        new_c.loop_direction = self.loop_direction[:]
         return new_c
         
     def is_valid(self) -> bool:
