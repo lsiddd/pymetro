@@ -1,5 +1,6 @@
 # ./components/train.py
 import math
+import logging
 from typing import List, Any
 from config import CONFIG
 from state import now_ms
@@ -178,7 +179,8 @@ class Train:
         s2 = stations[self.next_station_index]
         try:
             self._path_pts = self.line.get_train_waypoints(s1, s2)
-        except Exception:
+        except Exception as exc:
+            logging.warning("get_train_waypoints failed for train %d: %s", self.id, exc)
             self._path_pts = [(s1.x, s1.y), (s2.x, s2.y)]
 
         total = 0.0

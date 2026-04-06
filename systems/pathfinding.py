@@ -171,9 +171,6 @@ def bfs_shortest_path(graph, start, end):
     
     return None
 
-def build_station_graph_with_lines():
-    """DEPRECATED: Use GraphManager.get_graph() instead for cached results"""
-    return _graph_manager.get_graph()
 
 def mark_graph_dirty():
     """Mark the cached graph as dirty, recalculate passenger routes and train waypoints."""
@@ -188,22 +185,16 @@ def _recompute_train_waypoints():
     Called whenever line topology changes so that trains stay aligned with the
     visual line rendering (which recomputes offsets for parallel segments each frame).
     """
-    try:
-        from state import game_state
-        for train in game_state.trains:
-            train._compute_path_waypoints()
-    except Exception:
-        pass
+    from state import game_state
+    for train in game_state.trains:
+        train._compute_path_waypoints()
 
 def _recalculate_waiting_passengers():
     """Recalculate routes for all passengers currently waiting at a station."""
-    try:
-        from state import game_state
-        for passenger in game_state.passengers:
-            if passenger.on_train is None:
-                passenger.recalculate_path()
-    except Exception:
-        pass  # May be called before game_state is fully initialised
+    from state import game_state
+    for passenger in game_state.passengers:
+        if passenger.on_train is None:
+            passenger.recalculate_path()
 
 def find_optimal_path(graph, start, end):
     """Encontra o caminho usando o algoritmo A* otimizado com came_from dictionary"""

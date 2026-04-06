@@ -7,6 +7,7 @@ from components.station import Station
 from components.passenger import Passenger
 from components.line import Line
 from components.river import River
+from systems.pathfinding import mark_graph_dirty
 
 class Game:
     def __init__(self):
@@ -33,7 +34,8 @@ class Game:
         self.create_initial_stations(screen_width, screen_height)
         
         self.initialized = True
-    
+        mark_graph_dirty()
+
     def create_rivers(self, width, height):
         """Create rivers for the selected city"""
         from state import game_state
@@ -200,8 +202,7 @@ class Game:
         station = random.choice(game_state.stations)
         
         # Find available destination types (not the same as current station)
-        available_types = [s.type for s in game_state.stations if s.type != station.type]
-        available_types = list(set(available_types))  # Remove duplicates
+        available_types = list({s.type for s in game_state.stations if s.type != station.type})
         
         if available_types:
             destination = random.choice(available_types)

@@ -271,6 +271,9 @@ class Line:
         dy = point.y - yy
         return math.sqrt(dx * dx + dy * dy)
     
+    # Radius (px) for the Bézier corner fillet — must match rendering/game_renderer.py _FILLET_R
+    _FILLET_R: float = 14.0
+
     # ------------------------------------------------------------------
     # Metro-style 45°/90° routing helpers
     # ------------------------------------------------------------------

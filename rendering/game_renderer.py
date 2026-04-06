@@ -11,8 +11,10 @@ import math
 from config import CONFIG, STATION_TYPES
 from state import now_ms
 
-# Radius used for the Bézier corner fillet (px) — must match Line._FILLET_R
-_FILLET_R: float = 14.0
+from components.line import Line as _Line
+
+# Single source of truth for the fillet radius — defined on Line, imported here.
+_FILLET_R: float = _Line._FILLET_R
 
 
 class GameRenderer:

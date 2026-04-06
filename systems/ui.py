@@ -24,12 +24,6 @@ class UI:
         self.show_game_over_modal = False
         self.show_start_screen = True
         
-        self.pause_btn_rect = pygame.Rect(self.width - 100, 10, 40, 40)
-        self.speed_btn_rect = pygame.Rect(self.width - 50, 10, 40, 40)
-        self.ga_btn_rect = pygame.Rect(self.width - 150, 10, 40, 40)
-        self.spawn_btn_rect = pygame.Rect(self.width - 200, 10, 40, 40)
-        self.deep_ga_btn_rect = pygame.Rect(self.width - 250, 10, 40, 40)
-        self.instant_spawn_btn_rect = pygame.Rect(self.width - 300, 10, 40, 40)
         self.line_selector_rects = []
         self.line_delete_rects = []
         self.city_btn_rects = {}
@@ -40,20 +34,24 @@ class UI:
         self.train_resource_rect = None
         self.carriage_resource_rect = None
         self.interchange_resource_rect = None
-        
-    def update_screen_size(self, screen):
-        """Update UI for new screen size"""
-        self.screen = screen
-        self.width = screen.get_width()
-        self.height = screen.get_height()
-        
-        # Update button positions
+
+        self._init_rects()
+
+    def _init_rects(self):
+        """Initialise (or re-initialise) all fixed button rects based on current width."""
         self.pause_btn_rect = pygame.Rect(self.width - 100, 10, 40, 40)
         self.speed_btn_rect = pygame.Rect(self.width - 50, 10, 40, 40)
         self.ga_btn_rect = pygame.Rect(self.width - 150, 10, 40, 40)
         self.spawn_btn_rect = pygame.Rect(self.width - 200, 10, 40, 40)
         self.deep_ga_btn_rect = pygame.Rect(self.width - 250, 10, 40, 40)
         self.instant_spawn_btn_rect = pygame.Rect(self.width - 300, 10, 40, 40)
+
+    def update_screen_size(self, screen):
+        """Update UI for new screen size"""
+        self.screen = screen
+        self.width = screen.get_width()
+        self.height = screen.get_height()
+        self._init_rects()
     
     def draw(self):
         """Draw all UI elements"""
@@ -303,7 +301,7 @@ class UI:
         self.screen.blit(lbl_ga, lbl_ga.get_rect(center=(cx3, cy3)))
 
         # --- Spawn limit button ---
-        cx4, cy4 = getattr(self, 'spawn_btn_rect', pygame.Rect(self.width - 200, 10, 40, 40)).center
+        cx4, cy4 = self.spawn_btn_rect.center
         spawn_enabled = game_state.spawn_stations_enabled
         bg4 = (76, 175, 80) if spawn_enabled else (231, 76, 60) # green or red
         fg4 = (255, 255, 255)
@@ -314,7 +312,7 @@ class UI:
         self.screen.blit(lbl_sp, lbl_sp.get_rect(center=(cx4, cy4)))
 
         # --- Deep GA button ---
-        cx_dga, cy_dga = getattr(self, 'deep_ga_btn_rect', pygame.Rect(self.width - 250, 10, 40, 40)).center
+        cx_dga, cy_dga = self.deep_ga_btn_rect.center
         bg_dga = (102, 51, 255)  # purple
         fg_dga = (255, 255, 255)
         pygame.draw.circle(self.screen, bg_dga, (cx_dga, cy_dga), 20)
@@ -324,7 +322,7 @@ class UI:
         self.screen.blit(lbl_dga, lbl_dga.get_rect(center=(cx_dga, cy_dga)))
 
         # --- Instant Spawn button ---
-        cx_isp, cy_isp = getattr(self, 'instant_spawn_btn_rect', pygame.Rect(self.width - 300, 10, 40, 40)).center
+        cx_isp, cy_isp = self.instant_spawn_btn_rect.center
         bg_isp = (255, 153, 51)  # orange
         fg_isp = (255, 255, 255)
         pygame.draw.circle(self.screen, bg_isp, (cx_isp, cy_isp), 20)
@@ -556,17 +554,17 @@ class UI:
             game_state.speed = 2.5 if game_state.speed == 1 else 1
             return True
 
-        if getattr(self, 'ga_btn_rect', None) and self.ga_btn_rect.collidepoint(pos):
+        if self.ga_btn_rect.collidepoint(pos):
             return 'start_ga'
 
-        if getattr(self, 'spawn_btn_rect', None) and self.spawn_btn_rect.collidepoint(pos):
+        if self.spawn_btn_rect.collidepoint(pos):
             game_state.spawn_stations_enabled = not game_state.spawn_stations_enabled
             return True
 
-        if getattr(self, 'deep_ga_btn_rect', None) and self.deep_ga_btn_rect.collidepoint(pos):
+        if self.deep_ga_btn_rect.collidepoint(pos):
             return 'start_deep_ga'
-            
-        if getattr(self, 'instant_spawn_btn_rect', None) and self.instant_spawn_btn_rect.collidepoint(pos):
+
+        if self.instant_spawn_btn_rect.collidepoint(pos):
             return 'instant_spawn'
 
         # Line delete buttons

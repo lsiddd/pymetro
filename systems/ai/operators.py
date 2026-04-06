@@ -288,8 +288,9 @@ def generate_heuristic_seeds(game_state: Any, n: int = 20) -> List[Chromosome]:
         for _ in range(per_strategy):
             try:
                 seeds.append(strategy_fn())
-            except Exception:
-                pass  # Skip invalid seeds silently
+            except Exception as exc:
+                import logging
+                logging.debug("Heuristic seed generation failed (%s): %s", strategy_fn.__name__, exc)
 
     return seeds[:n]
 

@@ -49,12 +49,6 @@ class GameState:
         self.max_lines = city_config['maxLines']
         self.available_lines: int = 3  # Player starts with 3 lines; more unlock via weekly upgrades
         
-        # Mark pathfinding graph as dirty after reset
-        try:
-            from systems.pathfinding import mark_graph_dirty
-            mark_graph_dirty()
-        except ImportError:
-            pass  # Pathfinding module might not be loaded yet
     
     def set_city(self, city: str) -> None:
         """Set selected city and update configuration"""
