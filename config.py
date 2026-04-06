@@ -12,6 +12,7 @@ class CONFIG:
     MAX_PASSENGERS_WITH_INTERCHANGE: int = 12
     TRAIN_CAPACITY: int = 6
     MAX_TRAINS_PER_LINE: int = 4
+    MAX_CARRIAGES_PER_TRAIN: int = 3
     TRAIN_MAX_SPEED: float = 1.2
     TRAIN_ACCELERATION: float = 0.002
     PASSENGER_BOARD_TIME: int = 200
@@ -30,17 +31,6 @@ class CONFIG:
         'newyork': {'bridges': 2, 'maxLines': 7},
         'tokyo': {'bridges': 4, 'maxLines': 6}
     }
-    
-    # --- CHANGE START ---
-    # Difficulty levels for curriculum learning
-    DIFFICULTY_LEVELS: List[Dict[str, float]] = [
-        {'passenger_spawn_multiplier': 2.0, 'station_spawn_multiplier': 2.5},  # Stage 0 (Easiest)
-        {'passenger_spawn_multiplier': 1.5, 'station_spawn_multiplier': 2.0},  # Stage 1
-        {'passenger_spawn_multiplier': 1.0, 'station_spawn_multiplier': 1.0},  # Stage 2 (Normal)
-        {'passenger_spawn_multiplier': 0.8, 'station_spawn_multiplier': 0.9},  # Stage 3
-        {'passenger_spawn_multiplier': 0.6, 'station_spawn_multiplier': 0.8},  # Stage 4 (Hardest)
-    ]
-    # --- CHANGE END ---
 
 # Station Types
 class STATION_TYPES:

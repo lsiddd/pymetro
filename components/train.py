@@ -2,8 +2,8 @@
 import pygame
 import math
 import time
-from typing import List, Optional, Set, Any
-from config import CONFIG, STATION_TYPES
+from typing import List, Any
+from config import CONFIG
 
 class Train:
     def __init__(self, line: Any):
@@ -23,11 +23,15 @@ class Train:
         
         self.state: str = 'WAITING'  # WAITING, MOVING
         self.wait_timer: float = 0
-        
+
         self.speed: float = 0
         self.max_speed: float = CONFIG.TRAIN_MAX_SPEED
+
+        # Arc-length path for the current segment
+        self._path_pts: List[Any] = []
+        self._path_length: float = 0.0
         
-        self.has_carriage: bool = False
+        self.carriage_count: int = 0  # Number of carriages (0–MAX_CARRIAGES_PER_TRAIN)
         self.is_loop: bool = False
         
         if line.stations:
@@ -45,9 +49,12 @@ class Train:
             self.is_loop = False
     
     @property
+    def has_carriage(self) -> bool:
+        return self.carriage_count > 0
+
+    @property
     def total_capacity(self) -> int:
-        """Total capacity including carriage"""
-        return self.capacity + (CONFIG.TRAIN_CAPACITY if self.has_carriage else 0)
+        return self.capacity * (1 + self.carriage_count)
     
     def update(self, delta_time: float) -> None:
         """Update train movement and logic"""
@@ -63,45 +70,40 @@ class Train:
                 self.state = 'MOVING'
                 self.determine_next_station()
             return
-        
+
         self.check_loop_status()
-        
+
         current_station = self.line.stations[self.current_station_index] if self.current_station_index < len(self.line.stations) else None
         next_station = self.line.stations[self.next_station_index] if self.next_station_index < len(self.line.stations) else None
-        
+
         if not current_station or not next_station:
             self.state = 'WAITING'
             self.wait_timer = 100
             return
-        
-        # Calculate movement vector
-        dx = next_station.x - current_station.x
-        dy = next_station.y - current_station.y
-        distance = math.sqrt(dx * dx + dy * dy)
-        
-        if distance == 0:
-            # This can happen if a line has duplicate consecutive stations. Let's force progress.
-            self.progress = 1
-        
+
+        # Use arc-length of the routed visual path, falling back to straight distance
+        distance = self._path_length if self._path_length > 0 else math.hypot(
+            next_station.x - current_station.x,
+            next_station.y - current_station.y,
+        )
+
         # Speed control with acceleration/deceleration
+        # progress is in pixels traveled (0 → distance)
         accel_dist = min(distance * 0.4, 60)
         decel_start = max(distance - accel_dist, distance * 0.6)
-        current_pos = self.progress * distance
-        
-        if current_pos < accel_dist:
+
+        if self.progress < accel_dist:
             self.speed = min(self.max_speed, self.speed + CONFIG.TRAIN_ACCELERATION * delta_time)
-        elif current_pos > decel_start:
+        elif self.progress > decel_start:
             self.speed = max(0.2 * self.max_speed, self.speed - CONFIG.TRAIN_ACCELERATION * delta_time)
         else:
             self.speed = self.max_speed
-        
-        # Update position
-        if distance > 0: # Avoid division by zero
-             self.progress += (self.speed * game_state.speed * (delta_time / 16.67)) / distance
-        
-        if self.progress >= 1:
+
+        self.progress += self.speed * game_state.speed * (delta_time / 16.67)
+
+        if self.progress >= distance:
             # Arrived at next station
-            self.progress = 1
+            self.progress = distance
             self.x = next_station.x
             self.y = next_station.y
             self.current_station_index = self.next_station_index
@@ -124,8 +126,7 @@ class Train:
                     self.line.trains.remove(self)
                 
                 game_state.available_trains += 1
-                if self.has_carriage:
-                    game_state.carriages += 1
+                game_state.carriages += self.carriage_count
                 
                 # Stop any further processing for this decommissioned train
                 return
@@ -134,16 +135,24 @@ class Train:
             self.process_passengers(next_station)
             self.speed = 0
         else:
-            # Interpolate position
-            self.x = current_station.x + dx * self.progress
-            self.y = current_station.y + dy * self.progress
+            # Interpolate position along the routed visual path
+            if self._path_pts:
+                self.x, self.y = self._get_pos_on_path(self.progress)
+            else:
+                dx = next_station.x - current_station.x
+                dy = next_station.y - current_station.y
+                d = math.hypot(dx, dy)
+                if d > 0:
+                    frac = self.progress / d
+                    self.x = current_station.x + dx * frac
+                    self.y = current_station.y + dy * frac
         
 
     def determine_next_station(self) -> None:
         """Determine next station to travel to"""
         if self.current_station_index >= len(self.line.stations):
             self.current_station_index = 0
-        
+
         if self.is_loop:
             self.next_station_index = (self.current_station_index + 1) % (len(self.line.stations) - 1)
         else:
@@ -151,13 +160,68 @@ class Train:
                 self.direction = -1
             elif self.current_station_index == 0:
                 self.direction = 1
-            
             self.next_station_index = self.current_station_index + self.direction
-        
-        self.progress = 0
+
+        self.progress = 0.0
+        self._compute_path_waypoints()
+
+    def _compute_path_waypoints(self) -> None:
+        """Compute the visual waypoints for the current segment and store arc-length."""
+        stations = self.line.stations
+        if (self.current_station_index >= len(stations) or
+                self.next_station_index >= len(stations) or
+                self.next_station_index < 0):
+            self._path_pts = []
+            self._path_length = 0.0
+            return
+
+        s1 = stations[self.current_station_index]
+        s2 = stations[self.next_station_index]
+        try:
+            self._path_pts = self.line.get_train_waypoints(s1, s2)
+        except Exception:
+            self._path_pts = [(s1.x, s1.y), (s2.x, s2.y)]
+
+        total = 0.0
+        for i in range(len(self._path_pts) - 1):
+            a, b = self._path_pts[i], self._path_pts[i + 1]
+            total += math.hypot(b[0] - a[0], b[1] - a[1])
+        self._path_length = total if total > 0 else 1.0
+
+    def _get_angle_on_path(self, dist: float) -> float:
+        """Return the travel direction (radians) at arc-length *dist* along _path_pts."""
+        pts = self._path_pts
+        if not pts or len(pts) < 2:
+            return 0.0
+        remaining = max(0.0, dist)
+        for i in range(len(pts) - 1):
+            a, b = pts[i], pts[i + 1]
+            seg_len = math.hypot(b[0] - a[0], b[1] - a[1])
+            if remaining <= seg_len or i == len(pts) - 2:
+                return math.atan2(b[1] - a[1], b[0] - a[0])
+            remaining -= seg_len
+        # Fallback: direction of last segment
+        return math.atan2(pts[-1][1] - pts[-2][1], pts[-1][0] - pts[-2][0])
+
+    def _get_pos_on_path(self, dist: float) -> tuple:
+        """Return (x, y) at arc-length *dist* along self._path_pts."""
+        pts = self._path_pts
+        if not pts:
+            return (self.x, self.y)
+        remaining = max(0.0, dist)
+        for i in range(len(pts) - 1):
+            a, b = pts[i], pts[i + 1]
+            seg_len = math.hypot(b[0] - a[0], b[1] - a[1])
+            if remaining <= seg_len or i == len(pts) - 2:
+                t = (remaining / seg_len) if seg_len > 1e-6 else 1.0
+                t = min(t, 1.0)
+                return (a[0] + t * (b[0] - a[0]), a[1] + t * (b[1] - a[1]))
+            remaining -= seg_len
+        return pts[-1]
 
     def process_passengers(self, station: Any) -> None:
         """Handle passenger boarding and alighting"""
+        from state import game_state
         passengers_changed = 0
         
         # Alight passengers
@@ -170,6 +234,15 @@ class Train:
             else:
                 remaining_passengers.append(p)
         self.passengers = remaining_passengers
+
+        # Remove delivered passengers from the global list.
+        # Transferred passengers have on_train=None (set in _should_alight_passenger);
+        # delivered ones still point to this train.
+        for p in alighted_passengers:
+            if p.on_train is self:
+                p.on_train = None
+                if p in game_state.passengers:
+                    game_state.passengers.remove(p)
 
         # Board new passengers
         available_space = self.total_capacity - len(self.passengers)
@@ -309,26 +382,32 @@ class Train:
         if not current_st: return
         next_st = next_st or current_st
         
-        angle: float = 0.0
-        if next_st != current_st:
+        # Use path tangent for rotation so the train faces the right direction on curves
+        if self._path_pts and len(self._path_pts) >= 2:
+            angle = self._get_angle_on_path(self.progress)
+        elif next_st and next_st != current_st:
             angle = math.atan2(next_st.y - current_st.y, next_st.x - current_st.x)
+        else:
+            angle = 0.0
         
-        total_width = width + (width + 5 if self.has_carriage else 0)
+        n_units = 1 + self.carriage_count
+        gap = 5
+        total_width = n_units * width + (n_units - 1) * gap
         train_surface = pygame.Surface((total_width, height), pygame.SRCALPHA)
-        
-        pygame.draw.rect(train_surface, self.line.color, (0, 0, width, height))
-        pygame.draw.rect(train_surface, (51, 51, 51), (0, 0, width, height), 2)
-        
-        if self.has_carriage:
-            pygame.draw.rect(train_surface, self.line.color, (width + 5, 0, width, height))
-            pygame.draw.rect(train_surface, (51, 51, 51), (width + 5, 0, width, height), 2)
-            pygame.draw.line(train_surface, (51, 51, 51), (width, height//2), (width + 5, height//2), 1)
-        
+
+        for u in range(n_units):
+            ux = u * (width + gap)
+            pygame.draw.rect(train_surface, self.line.color, (ux, 0, width, height))
+            pygame.draw.rect(train_surface, (51, 51, 51), (ux, 0, width, height), 2)
+            if u > 0:  # coupling line between units
+                pygame.draw.line(train_surface, (51, 51, 51),
+                                 (ux - gap, height // 2), (ux, height // 2), 1)
+
         if self.passengers:
             max_dots = min(len(self.passengers), 4)
             for i in range(max_dots):
-                dot_x = width//4 + (i % 2) * width//4
-                dot_y = height//4 + (i // 2) * height//4
+                dot_x = width // 4 + (i % 2) * width // 4
+                dot_y = height // 4 + (i // 2) * height // 4
                 pygame.draw.circle(train_surface, (255, 255, 255), (dot_x, dot_y), 2)
         
         rotated_surface = pygame.transform.rotate(train_surface, -math.degrees(angle))

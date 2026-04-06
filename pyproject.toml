@@ -4,10 +4,6 @@ version = "0.1.0"
 requires-python = ">=3.10"
 dependencies = [
     "pygame==2.5.2",
-    "torch",
-    "numpy",
-    "matplotlib",
-    "tensorboard",
 ]
 
 [project.scripts]
@@ -15,7 +11,7 @@ pymetro = "main:main"
 
 [tool.setuptools.packages.find]
 where = ["."]
-include = ["components*", "rl_agent*", "systems*"]
+include = ["components*", "systems*"]
 
 [build-system]
 requires = ["setuptools>=68"]

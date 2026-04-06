@@ -8,24 +8,19 @@ from config import CONFIG, STATION_TYPES
 from components.station import Station
 from components.passenger import Passenger
 from components.line import Line
-from components.train import Train
 from components.river import River
 
 class Game:
     def __init__(self):
         self.initialized = False
     
-    # --- CHANGE START ---
-    def init_game(self, screen_width, screen_height, difficulty_stage=0):
-    # --- CHANGE END ---
+    def init_game(self, screen_width, screen_height):
         """Initialize new game"""
         from state import game_state
-        
+
         selected_city = game_state.selected_city  # Preserve city selection across reset
         game_state.reset()
         game_state.set_city(selected_city)
-
-        game_state.difficulty_stage = difficulty_stage
 
         # Create lines
         game_state.lines = []
@@ -160,20 +155,14 @@ class Game:
         if elapsed > CONFIG.WEEK_DURATION:
             game_state.week += 1
             game_state.week_start_time = current_time
-            game_state.available_trains += 1  # Always receive 1 locomotive per week
+            game_state.available_trains += 1
+            # Zoom out 3 % per week, down to 55 %
+            game_state.camera_zoom = max(0.55, 1.0 - (game_state.week - 1) * 0.03)
             return 'show_upgrades'
         
-        # --- CHANGE START ---
-        # Progressive difficulty scaling using curriculum learning stage
-        difficulty_settings = CONFIG.DIFFICULTY_LEVELS[game_state.difficulty_stage]
         difficulty_multiplier = CONFIG.DIFFICULTY_SCALE_FACTOR ** (game_state.week - 1)
-        
-        passenger_multiplier = difficulty_settings['passenger_spawn_multiplier']
-        station_multiplier = difficulty_settings['station_spawn_multiplier']
-
-        current_spawn_rate = CONFIG.BASE_SPAWN_RATE * difficulty_multiplier * passenger_multiplier
-        current_station_spawn_rate = CONFIG.BASE_STATION_SPAWN_RATE * difficulty_multiplier * station_multiplier
-        # --- CHANGE END ---
+        current_spawn_rate = CONFIG.BASE_SPAWN_RATE * difficulty_multiplier
+        current_station_spawn_rate = CONFIG.BASE_STATION_SPAWN_RATE * difficulty_multiplier
         
         # Spawn passengers
         if current_time - game_state.last_spawn_time > current_spawn_rate / game_state.speed:
@@ -224,49 +213,72 @@ class Game:
             game_state.passengers.append(passenger)
     
     def spawn_station(self, screen_width, screen_height):
-        """Spawn a new station"""
+        """Spawn a new station."""
         from state import game_state
-        
+
+        station_type = self.get_new_station_type()
+        special_types = STATION_TYPES.special_types()
+        is_special = station_type in special_types
+
         margin = 80
         min_distance = 120
         max_attempts = 500
-        
-        for attempt in range(max_attempts):
-            x = margin + random.random() * (screen_width - margin * 2)
-            y = margin + random.random() * (screen_height - margin * 2)
-            
-            # Check if position is valid
+
+        for _ in range(max_attempts):
+            if is_special:
+                # Special stations appear near the outer 25 % of the map edges
+                edge = random.randint(0, 3)  # top/right/bottom/left
+                border_depth = 0.25
+                if edge == 0:
+                    x = margin + random.random() * (screen_width - 2 * margin)
+                    y = margin + random.random() * screen_height * border_depth
+                elif edge == 1:
+                    x = screen_width - margin - random.random() * screen_width * border_depth
+                    y = margin + random.random() * (screen_height - 2 * margin)
+                elif edge == 2:
+                    x = margin + random.random() * (screen_width - 2 * margin)
+                    y = screen_height - margin - random.random() * screen_height * border_depth
+                else:
+                    x = margin + random.random() * screen_width * border_depth
+                    y = margin + random.random() * (screen_height - 2 * margin)
+            else:
+                x = margin + random.random() * (screen_width  - margin * 2)
+                y = margin + random.random() * (screen_height - margin * 2)
+
             too_close = any(math.hypot(s.x - x, s.y - y) < min_distance for s in game_state.stations)
-            in_river = any(river.contains(x, y) for river in game_state.rivers)
-            
+            in_river  = any(river.contains(x, y) for river in game_state.rivers)
+
             if not too_close and not in_river:
-                # Determine station type
-                station_type = self.get_new_station_type()
                 game_state.stations.append(Station(x, y, station_type))
                 return
-        
+
         print("Warning: Could not find valid position for new station")
     
+    # Weighted distribution matching original: circles are common, squares rare
+    _BASIC_WEIGHTS = [
+        (STATION_TYPES.CIRCLE,   6),
+        (STATION_TYPES.TRIANGLE, 3),
+        (STATION_TYPES.SQUARE,   1),
+    ]
+    _BASIC_POOL = sum([[t] * w for t, w in _BASIC_WEIGHTS], [])
+
     def get_new_station_type(self):
-        """Determine type for new station"""
+        """Determine type for new station, respecting original proportions."""
         from state import game_state
-        
+
         game_time = time.time() * 1000 - game_state.game_start_time
         minutes_played = game_time / 60000
-        
-        basic_types = STATION_TYPES.basic_types()
+
         special_types = STATION_TYPES.special_types()
-        
-        # After 2 minutes, 10% chance for special types
-        if minutes_played > 2 and random.random() < 0.1:
-            # Check for unused special types
+
+        # After 2 minutes, ~12 % chance for a special type
+        if minutes_played > 2 and random.random() < 0.12:
             used_special = {s.type for s in game_state.stations if s.type in special_types}
             available_special = [t for t in special_types if t not in used_special]
-            
             if available_special:
                 return random.choice(available_special)
-        
-        return random.choice(basic_types)
+
+        return random.choice(self._BASIC_POOL)
     
     def check_game_over(self):
         """Check if game over conditions are met"""
@@ -282,28 +294,31 @@ class Game:
         return False
     
     def render(self, screen):
-        """Render the game world"""
+        """Render the game world into an intermediate surface and return it.
+
+        The caller is responsible for compositing the surface onto the screen
+        (with zoom + centering) so that overlays drawn afterwards (e.g. input
+        preview) land on the world surface before the final scale, keeping them
+        correctly aligned with game objects at all zoom levels.
+        """
         from state import game_state
-        from systems.input import InputHandler
-        
-        # Clear screen with background color
-        screen.fill((244, 241, 233))
-        
+
         if not self.initialized:
-            return
-        
-        # Draw rivers
+            screen.fill((244, 241, 233))
+            return None
+
+        sw, sh = screen.get_width(), screen.get_height()
+
+        world_surf = pygame.Surface((sw, sh))
+        world_surf.fill((244, 241, 233))
+
         for river in game_state.rivers:
-            river.draw(screen)
-        
-        # Draw metro lines
+            river.draw(world_surf)
         for line in game_state.lines:
-            line.draw(screen)
-        
-        # Draw stations
+            line.draw(world_surf)
         for station in game_state.stations:
-            station.draw(screen)
-        
-        # Draw trains
+            station.draw(world_surf)
         for train in game_state.trains:
-            train.draw(screen)
+            train.draw(world_surf)
+
+        return world_surf

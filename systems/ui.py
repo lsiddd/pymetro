@@ -14,23 +14,9 @@ class UI:
         # self.large_font = pygame.font.Font(None, 48)
         # self.small_font = pygame.font.Font(None, 18)
 
-        try:
-            # On Windows, 'Segoe UI Emoji' is often available
-            self.font = pygame.font.Font("seguiemj.ttf", 24)
-            self.large_font = pygame.font.Font("seguiemj.ttf", 48)
-            self.small_font = pygame.font.Font("seguiemj.ttf", 18)
-        except FileNotFoundError:
-            # Fallback for other systems or if the font isn't installed.
-            # You should provide a font file like NotoEmoji-Regular.ttf with your game.
-            try:
-                self.font = pygame.font.Font("NotoEmoji-Regular.ttf", 24)
-                self.large_font = pygame.font.Font("NotoEmoji-Regular.ttf", 48)
-                self.small_font = pygame.font.Font("NotoEmoji-Regular.ttf", 18)
-            except FileNotFoundError:
-                 print("Emoji font not found! Please add a .ttf font file to the project.")
-                 self.font = pygame.font.Font(None, 24)
-                 self.large_font = pygame.font.Font(None, 48)
-                 self.small_font = pygame.font.Font(None, 18)
+        self.font       = pygame.font.Font(None, 24)
+        self.large_font = pygame.font.Font(None, 48)
+        self.small_font = pygame.font.Font(None, 18)
         
         # UI state
         self.show_upgrade_modal = False
@@ -38,9 +24,9 @@ class UI:
         self.show_game_over_modal = False
         self.show_start_screen = True
         
-        # Button rects
         self.pause_btn_rect = pygame.Rect(self.width - 100, 10, 40, 40)
         self.speed_btn_rect = pygame.Rect(self.width - 50, 10, 40, 40)
+        self.ga_btn_rect = pygame.Rect(self.width - 150, 10, 40, 40)
         self.line_selector_rects = []
         self.line_delete_rects = []
         self.city_btn_rects = {}
@@ -61,10 +47,10 @@ class UI:
         # Update button positions
         self.pause_btn_rect = pygame.Rect(self.width - 100, 10, 40, 40)
         self.speed_btn_rect = pygame.Rect(self.width - 50, 10, 40, 40)
+        self.ga_btn_rect = pygame.Rect(self.width - 150, 10, 40, 40)
     
     def draw(self):
         """Draw all UI elements"""
-        from state import game_state
         
         if self.show_start_screen:
             self.draw_start_screen()
@@ -194,39 +180,37 @@ class UI:
         """Draw resource counters. Locomotives, carriages and interchanges are draggable."""
         from state import game_state
 
-        # Reset draggable rects each frame
         self.train_resource_rect = None
         self.carriage_resource_rect = None
         self.interchange_resource_rect = None
 
         resources = [
-            ('train',       '🚂', game_state.available_trains, True),
-            ('carriage',    '🚃', game_state.carriages,        game_state.carriages > 0),
-            ('interchange', '⭕', game_state.interchanges,     game_state.interchanges > 0),
-            ('bridge',      '🌉', game_state.bridges,          game_state.bridges > 0),
+            ('train',       game_state.available_trains, True),
+            ('carriage',    game_state.carriages,        game_state.carriages > 0),
+            ('interchange', game_state.interchanges,     game_state.interchanges > 0),
+            ('bridge',      game_state.bridges,          game_state.bridges > 0),
         ]
 
         x = self.width // 2 - 100
-        for key, icon, count, visible in resources:
+        for key, count, visible in resources:
             if not visible:
                 continue
 
-            resource_rect = pygame.Rect(x, 15, 60, 30)
-
-            # Highlight draggable resources
+            resource_rect = pygame.Rect(x, 12, 58, 36)
             is_draggable = key in ('train', 'carriage', 'interchange') and count > 0
-            bg_color = (220, 240, 255) if is_draggable else (255, 255, 255)
-            border_color = (50, 120, 200) if is_draggable else (51, 51, 51)
+            bg_color     = (220, 240, 255) if is_draggable else (245, 245, 245)
+            border_color = (50, 120, 200)  if is_draggable else (160, 160, 160)
 
-            pygame.draw.rect(self.screen, bg_color, resource_rect)
-            pygame.draw.rect(self.screen, border_color, resource_rect, 2)
+            pygame.draw.rect(self.screen, bg_color,     resource_rect, border_radius=4)
+            pygame.draw.rect(self.screen, border_color, resource_rect, 2, border_radius=4)
 
-            icon_text  = self.font.render(icon, True, (51, 51, 51))
-            count_text = self.small_font.render(str(count), True, (51, 51, 51))
-            self.screen.blit(icon_text,  (x + 5,  20))
-            self.screen.blit(count_text, (x + 35, 25))
+            # Draw small icon on the left side of the badge
+            self._draw_resource_icon(self.screen, key, x + 14, 30)
 
-            # Store rects so input handler can detect drags
+            # Count on the right
+            count_surf = self.font.render(str(count), True, (51, 51, 51))
+            self.screen.blit(count_surf, (x + 34, 22))
+
             if key == 'train':
                 self.train_resource_rect = resource_rect
             elif key == 'carriage':
@@ -234,35 +218,83 @@ class UI:
             elif key == 'interchange':
                 self.interchange_resource_rect = resource_rect
 
-            x += 70
+            x += 68
+
+    def _draw_resource_icon(self, surface, key, cx, cy):
+        """Draw a small icon for each resource type using pygame primitives."""
+        dark = (51, 51, 51)
+        if key == 'train':
+            # Rectangle body + two wheel dots
+            pygame.draw.rect(surface, dark, (cx - 8, cy - 5, 16, 9), border_radius=2)
+            pygame.draw.circle(surface, dark, (cx - 5, cy + 5), 3)
+            pygame.draw.circle(surface, dark, (cx + 4, cy + 5), 3)
+            pygame.draw.circle(surface, (255, 255, 255), (cx - 5, cy + 5), 2)
+            pygame.draw.circle(surface, (255, 255, 255), (cx + 4, cy + 5), 2)
+        elif key == 'carriage':
+            # Smaller rectangle + coupling line on left
+            pygame.draw.rect(surface, dark, (cx - 6, cy - 4, 13, 8), border_radius=2)
+            pygame.draw.circle(surface, dark, (cx - 4, cy + 4), 2)
+            pygame.draw.circle(surface, dark, (cx + 3, cy + 4), 2)
+            pygame.draw.line(surface, dark, (cx - 9, cy), (cx - 6, cy), 2)
+        elif key == 'interchange':
+            # Concentric circles
+            pygame.draw.circle(surface, dark, (cx, cy), 8, 2)
+            pygame.draw.circle(surface, dark, (cx, cy), 3)
+        elif key == 'bridge':
+            # Simple arch
+            pygame.draw.arc(surface, dark, (cx - 9, cy - 7, 18, 14), 0, math.pi, 3)
+            pygame.draw.line(surface, dark, (cx - 9, cy + 1), (cx + 9, cy + 1), 2)
+        elif key == 'line':
+            # Coloured line segment with a + symbol
+            pygame.draw.line(surface, (76, 153, 0), (cx - 9, cy), (cx + 9, cy), 4)
+            pygame.draw.line(surface, dark, (cx, cy - 7), (cx, cy + 7), 2)
+            pygame.draw.line(surface, dark, (cx - 5, cy), (cx + 5, cy), 2)
     
     def draw_control_buttons(self):
-        """Draw pause and speed control buttons"""
+        """Draw pause and speed control buttons using pygame shapes."""
         from state import game_state
+
+        # --- Pause / Resume button ---
+        cx, cy = self.pause_btn_rect.center
+        is_paused = game_state.paused
+        bg  = (51, 51, 51) if is_paused else (255, 255, 255)
+        fg  = (255, 255, 255) if is_paused else (51, 51, 51)
+        pygame.draw.circle(self.screen, bg, (cx, cy), 20)
+        pygame.draw.circle(self.screen, (51, 51, 51), (cx, cy), 20, 2)
+        if is_paused:
+            # Play triangle
+            pts = [(cx - 6, cy - 8), (cx - 6, cy + 8), (cx + 9, cy)]
+            pygame.draw.polygon(self.screen, fg, pts)
+        else:
+            # Pause bars
+            pygame.draw.rect(self.screen, fg, (cx - 7, cy - 7, 5, 14))
+            pygame.draw.rect(self.screen, fg, (cx + 2, cy - 7, 5, 14))
+
+        # --- Speed button ---
+        cx2, cy2 = self.speed_btn_rect.center
+        fast = game_state.speed != 1
+        bg2 = (51, 51, 51) if fast else (255, 255, 255)
+        fg2 = (255, 255, 255) if fast else (51, 51, 51)
+        pygame.draw.circle(self.screen, bg2, (cx2, cy2), 20)
+        pygame.draw.circle(self.screen, (51, 51, 51), (cx2, cy2), 20, 2)
+        if fast:
+            # 1x label when fast (to signal "click to slow down")
+            lbl = self.small_font.render("1x", True, fg2)
+            self.screen.blit(lbl, lbl.get_rect(center=(cx2, cy2)))
+        else:
+            # Two small triangles pointing right (fast-forward)
+            pygame.draw.polygon(self.screen, fg2, [(cx2 - 9, cy2 - 7), (cx2 - 9, cy2 + 7), (cx2,   cy2)])
+            pygame.draw.polygon(self.screen, fg2, [(cx2,     cy2 - 7), (cx2,     cy2 + 7), (cx2 + 9, cy2)])
+
+        # --- GA button ---
+        cx3, cy3 = self.ga_btn_rect.center
+        bg3 = (51, 102, 255)  # blue
+        fg3 = (255, 255, 255)
+        pygame.draw.circle(self.screen, bg3, (cx3, cy3), 20)
+        pygame.draw.circle(self.screen, (51, 51, 51), (cx3, cy3), 20, 2)
         
-        # Pause button
-        pause_color = (51, 51, 51) if game_state.paused else (255, 255, 255)
-        text_color = (255, 255, 255) if game_state.paused else (51, 51, 51)
-        
-        pygame.draw.circle(self.screen, pause_color, self.pause_btn_rect.center, 20)
-        pygame.draw.circle(self.screen, (51, 51, 51), self.pause_btn_rect.center, 20, 2)
-        
-        pause_text = "▶" if game_state.paused else "⏸"
-        pause_surface = self.font.render(pause_text, True, text_color)
-        pause_text_rect = pause_surface.get_rect(center=self.pause_btn_rect.center)
-        self.screen.blit(pause_surface, pause_text_rect)
-        
-        # Speed button
-        speed_color = (51, 51, 51) if game_state.speed != 1 else (255, 255, 255)
-        text_color = (255, 255, 255) if game_state.speed != 1 else (51, 51, 51)
-        
-        pygame.draw.circle(self.screen, speed_color, self.speed_btn_rect.center, 20)
-        pygame.draw.circle(self.screen, (51, 51, 51), self.speed_btn_rect.center, 20, 2)
-        
-        speed_text = "⏩" if game_state.speed != 1 else "▶"
-        speed_surface = self.font.render(speed_text, True, text_color)
-        speed_text_rect = speed_surface.get_rect(center=self.speed_btn_rect.center)
-        self.screen.blit(speed_surface, speed_text_rect)
+        lbl_ga = self.small_font.render("AI", True, fg3)
+        self.screen.blit(lbl_ga, lbl_ga.get_rect(center=(cx3, cy3)))
     
     def draw_line_selector(self):
         """Draw line selection buttons at bottom"""
@@ -309,7 +341,7 @@ class UI:
                 pygame.draw.circle(self.screen, (231, 76, 60), (delete_center_x, delete_center_y), 8)
                 pygame.draw.circle(self.screen, (255, 255, 255), (delete_center_x, delete_center_y), 8, 2)
                 
-                delete_text = self.small_font.render("×", True, (255, 255, 255))
+                delete_text = self.small_font.render("x", True, (255, 255, 255))
                 delete_text_rect = delete_text.get_rect(center=(delete_center_x, delete_center_y))
                 self.screen.blit(delete_text, delete_text_rect)
     
@@ -333,8 +365,7 @@ class UI:
         pygame.draw.rect(self.screen, (230, 245, 230), loco_rect)
         pygame.draw.rect(self.screen, (100, 180, 100), loco_rect, 3)
 
-        loco_icon = self.large_font.render('🚂', True, (51, 51, 51))
-        self.screen.blit(loco_icon, loco_icon.get_rect(center=(loco_rect.centerx, loco_rect.centery - 18)))
+        self._draw_resource_icon(self.screen, 'train', loco_rect.centerx, loco_rect.centery - 18)
         loco_lbl = self.small_font.render('Locomotive', True, (51, 51, 51))
         self.screen.blit(loco_lbl, loco_lbl.get_rect(center=(loco_rect.centerx, loco_rect.centery + 28)))
         received = self.small_font.render('(received)', True, (100, 160, 100))
@@ -359,8 +390,8 @@ class UI:
             pygame.draw.rect(self.screen, (51, 51, 51), rect, 3)
 
             content = self.get_upgrade_content(upgrade)
-            icon = self.large_font.render(content['icon'], True, (51, 51, 51))
-            self.screen.blit(icon, icon.get_rect(center=(rect.centerx, rect.centery - 18)))
+            icon_key = content.get('icon_key', upgrade)
+            self._draw_resource_icon(self.screen, icon_key, rect.centerx, rect.centery - 18)
             name = self.small_font.render(content['name'], True, (51, 51, 51))
             self.screen.blit(name, name.get_rect(center=(rect.centerx, rect.centery + 30)))
     
@@ -408,14 +439,14 @@ class UI:
         self.screen.blit(restart_text, restart_text_rect)
     
     def get_upgrade_content(self, upgrade):
-        """Get display content for upgrade type"""
+        """Get display content for upgrade type."""
         content = {
-            'line': {'icon': '🚇', 'name': 'New Line'},
-            'tunnel': {'icon': '🌉', 'name': 'Bridge/Tunnel'},
-            'carriage': {'icon': '🚃', 'name': 'Carriage'},
-            'interchange': {'icon': '🔄', 'name': 'Interchange'}
+            'line':        {'icon_key': 'line',        'name': 'New Line'},
+            'tunnel':      {'icon_key': 'bridge',      'name': 'Bridge/Tunnel'},
+            'carriage':    {'icon_key': 'carriage',    'name': 'Carriage'},
+            'interchange': {'icon_key': 'interchange', 'name': 'Interchange'},
         }
-        return content.get(upgrade, {'icon': '?', 'name': 'Unknown'})
+        return content.get(upgrade, {'icon_key': 'bridge', 'name': 'Unknown'})
     
     def show_upgrade_choices(self):
         """Show upgrade modal. Locomotive is always granted; player picks 1 of 2 random extras."""
@@ -428,7 +459,6 @@ class UI:
     
     def handle_click(self, pos):
         """Handle mouse click events"""
-        from state import game_state
         
         if self.show_start_screen:
             return self.handle_start_screen_click(pos)
@@ -488,6 +518,9 @@ class UI:
         if self.speed_btn_rect.collidepoint(pos):
             game_state.speed = 2.5 if game_state.speed == 1 else 1
             return True
+
+        if getattr(self, 'ga_btn_rect', None) and self.ga_btn_rect.collidepoint(pos):
+            return 'start_ga'
 
         # Line delete buttons
         for rect, line_index in self.line_delete_rects:

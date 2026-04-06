@@ -11,7 +11,7 @@ class GameState:
     def reset(self) -> None:
         """Reset game state to initial values"""
         self.paused: bool = False
-        self.speed: int = 1
+        self.speed: float = 1.0
         self.score: int = 0
         self.week: int = 1
         self.day: int = 0
@@ -20,7 +20,6 @@ class GameState:
         self.trains: List[Any] = []
         self.passengers: List[Any] = []
         self.selected_line: int = 0
-        self.available_lines: int = 3
         self.max_lines: int = 5
         self.bridges: int = 2
         self.carriages: int = 0
@@ -36,15 +35,14 @@ class GameState:
         self.train_id_counter: int = 0
         self.passengers_delivered: int = 0
         self.game_start_time: float = time.time() * 1000
-        
-        # --- CHANGE START ---
-        self.difficulty_stage: int = 0 # For curriculum learning
-        # --- CHANGE END ---
+
+        self.camera_zoom: float = 1.0   # Decreases over weeks → visual zoom-out
 
         # Apply city configuration
         city_config = CONFIG.CITIES[self.selected_city]
         self.bridges = city_config['bridges']
         self.max_lines = city_config['maxLines']
+        self.available_lines: int = 3  # Player starts with 3 lines; more unlock via weekly upgrades
         
         # Mark pathfinding graph as dirty after reset
         try:
